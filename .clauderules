@@ -1,0 +1,54 @@
+# .clauderules — Sync MSC Project Rules
+# Este archivo actúa como memoria fija para Claude Code en este proyecto.
+# NO modificar sin instrucción explícita del usuario.
+
+## PROYECTO
+- Nombre: Sync MSC
+- Descripción: Sistema de gestión de mantenimiento para una planta concentradora
+- Stack: Next.js 15 (App Router), TypeScript, Tailwind CSS, MongoDB con Mongoose
+- Repositorio GitHub: https://github.com/ovica16/sync-msc
+
+## ARQUITECTURA
+- Framework: Next.js 15 con App Router (`src/app/`)
+- Base de datos: MongoDB Compass → conexión mediante Mongoose
+- Estilos: Tailwind CSS
+- Lenguaje: TypeScript estricto en todo el proyecto
+- API: Route Handlers dentro de `src/app/api/`
+- Modelos DB: `src/lib/models/`
+- Conexión DB: `src/lib/db.ts`
+- Componentes: `src/components/`
+- Hooks: `src/hooks/`
+- Tipos: `src/types/`
+
+## CONVENCIONES DE CÓDIGO
+- Sin comentarios a menos que el PORQUÉ sea no obvio
+- Componentes: PascalCase, archivos `.tsx`
+- Funciones utilitarias: camelCase, archivos `.ts`
+- Modelos Mongoose: PascalCase, singular (ej. `Equipment.ts`)
+- Variables de entorno en `.env.local` (MONGODB_URI obligatorio)
+- Usar `"use client"` solo cuando sea estrictamente necesario
+- Preferir Server Components por defecto
+
+## DOMINIO DEL NEGOCIO
+- Entidad central: Planta concentradora de minerales
+- Módulos previstos (se irán desarrollando iterativamente):
+  - Equipos (Equipment): registro y ficha técnica de activos
+  - Órdenes de Trabajo (Work Orders): creación, asignación, seguimiento
+  - Planes de Mantenimiento (Maintenance Plans): preventivo/predictivo/correctivo
+  - Personal técnico (Technicians): asignación a tareas
+  - Historial (History): registro de intervenciones por equipo
+  - Dashboard: KPIs de disponibilidad, MTTR, MTBF
+- Tipos de mantenimiento: Preventivo, Correctivo, Predictivo, Inspección
+
+## INSTRUCCIONES FIJAS PARA CLAUDE
+- Siempre preguntar si no está claro a qué módulo pertenece un cambio
+- No agregar funcionalidades no solicitadas explícitamente
+- Mantener el schema de Mongoose alineado con los tipos TypeScript
+- Cada nuevo módulo debe incluir: modelo, API route, componente de listado y formulario
+- Usar `ObjectId` de Mongoose para referencias entre colecciones
+- El idioma del código (variables, funciones) puede ser inglés; el idioma de la UI es español
+- Pedir confirmación antes de hacer push a GitHub o cambios destructivos
+- Actualizar este archivo cuando el usuario defina nuevas reglas o módulos
+
+## HISTORIAL DE DECISIONES
+- 2026-05-07: Inicio del proyecto. Stack definido por el usuario: Next.js + MongoDB Compass.
