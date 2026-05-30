@@ -1,6 +1,4 @@
 services:
-
-  # ── Base de datos PostgreSQL local ─────────────────────────────────────────
   postgres:
     image: postgres:16-alpine
     container_name: sync-msc-postgres
@@ -18,23 +16,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
-
-  # ── Aplica el schema Prisma y migra datos desde MongoDB ───────────────────
-  migrate:
-    build:
-      context: .
-      dockerfile: Dockerfile.migrate
-    container_name: sync-msc-migrate
-    environment:
-      DATABASE_URL: postgresql://syncmsc:syncmsc123@postgres:5432/syncmsc
-      MONGODB_URI: ${MONGODB_URI:-mongodb://host.docker.internal:27017/sync-msc}
-    depends_on:
-      postgres:
-        condition: service_healthy
-    # Se ejecuta una sola vez y termina
-    restart: "no"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
 
 volumes:
   postgres_data:
