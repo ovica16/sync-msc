@@ -1,32 +1,32 @@
-import { connectDB } from "@/lib/db";
-import { ProgramacionSemanal } from "@/lib/models/ProgramacionSemanal";
+import { prisma } from "@/lib/prisma";
 import { NextRequest } from "next/server";
 
 type Ctx = { params: Promise<{ id: string }> };
 
+const include = { otsProgramadas: true, personal: true, resumenDias: true };
+
+function serialize(p: Record<string, unknown>) {
+  return { ...p, _id: p.id };
+}
+
 export async function GET(_req: NextRequest, { params }: Ctx) {
   const { id } = await params;
-  await connectDB();
-  const programa = await ProgramacionSemanal.findById(id).lean();
+  const programa = await prisma.programacionSemanal.findUnique({ where: { id }, include });
   if (!programa) return Response.json({ ok: false, error: "No encontrado" }, { status: 404 });
-  return Response.json({ ...programa, _id: String(programa._id) });
+  return Response.json(serialize(programa as Record<string, unknown>));
 }
 
 export async function PATCH(req: NextRequest, { params }: Ctx) {
   try {
     const { id } = await params;
-    await connectDB();
     const body = await req.json();
-    const update: Record<string, unknown> = { ...body };
-
-    const programa = await ProgramacionSemanal.findByIdAndUpdate(
-      id,
-      { $set: update },
-      { new: true, runValidators: true }
-    ).lean();
-
-    if (!programa) return Response.json({ ok: false, error: "No encontrado" }, { status: 404 });
-    return Response.json({ ok: true, programa: { ...programa, _id: String(programa._id) } });
+    // Solo actualizar campos de nivel superior (no otsProgramadas)
+    const { otsProgramadas, personal, resumenDias, ...topLevel } = body;
+    void otsProgramadas; void personal; void resumenDias;
+    const programa = await prisma.programacionSemanal.update({
+      where: { id }, data: topLevel, include,
+    });
+    return Response.json({ ok: true, programa: serialize(programa as Record<string, unknown>) });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Error interno";
     return Response.json({ ok: false, error: message }, { status: 400 });
@@ -37,55 +37,31 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
 export async function PUT(req: NextRequest, { params }: Ctx) {
   try {
     const { id } = await params;
-    await connectDB();
     const body = await req.json();
-    const { numeroOT, dia, grupo, estado, observaciones, pasarNoche, pasarNocheMotivo, pasarNocheNota, pasarNochePor, bitacoraEntry } = body;
+    const { numeroOT, dia, estado, observaciones,
+            pasarNoche, pasarNocheMotivo, pasarNocheNota, pasarNochePor } = body;
 
-    if (!numeroOT || !dia) {
+    if (!numeroOT || !dia)
       return Response.json({ ok: false, error: "numeroOT y dia son requeridos" }, { status: 400 });
-    }
 
-    // Agregar entrada a la bitácora de turnero — filtra por grupo para separar Diurno/Nocturno
-    if (bitacoraEntry) {
-      const arrayFilter = grupo
-        ? { "ot.numeroOT": numeroOT, "ot.dia": dia, "ot.grupo": grupo }
-        : { "ot.numeroOT": numeroOT, "ot.dia": dia };
+    await prisma.otProgramada.updateMany({
+      where: { programacionSemanalId: id, numeroOT, dia },
+      data: {
+        ...(estado       !== undefined ? { estado } : {}),
+        ...(observaciones !== undefined ? { observaciones } : {}),
+        ...(pasarNoche   !== undefined ? {
+          pasarNoche,
+          pasarNocheMotivo: pasarNocheMotivo ?? "",
+          pasarNocheNota:   pasarNocheNota   ?? "",
+          pasarNochePor:    pasarNochePor     ?? "",
+          pasarNocheAt:     pasarNoche ? new Date() : null,
+        } : {}),
+      },
+    });
 
-      const programa = await ProgramacionSemanal.findOneAndUpdate(
-        { _id: id, "otsProgramadas.numeroOT": numeroOT, "otsProgramadas.dia": dia },
-        {
-          $push: { "otsProgramadas.$[ot].bitacora": { ...bitacoraEntry, fecha: new Date() } },
-          $set:  { "otsProgramadas.$[ot].esGuardia": true, "otsProgramadas.$[ot].estado": "en_proceso" },
-        },
-        { arrayFilters: [arrayFilter], new: true }
-      ).lean();
-      if (!programa) return Response.json({ ok: false, error: "OT no encontrada" }, { status: 404 });
-      return Response.json({ ok: true, programa: { ...programa, _id: String(programa._id) } });
-    }
-
-    const setFields: Record<string, unknown> = {};
-    if (estado !== undefined) setFields["otsProgramadas.$[ot].estado"] = estado;
-    if (observaciones !== undefined) setFields["otsProgramadas.$[ot].observaciones"] = observaciones;
-    if (pasarNoche !== undefined) {
-      setFields["otsProgramadas.$[ot].pasarNoche"] = pasarNoche;
-      setFields["otsProgramadas.$[ot].pasarNocheMotivo"] = pasarNocheMotivo ?? "";
-      setFields["otsProgramadas.$[ot].pasarNocheNota"] = pasarNocheNota ?? "";
-      setFields["otsProgramadas.$[ot].pasarNochePor"] = pasarNochePor ?? "";
-      setFields["otsProgramadas.$[ot].pasarNocheAt"] = pasarNoche ? new Date() : null;
-    }
-
-    const programa = await ProgramacionSemanal.findOneAndUpdate(
-      { _id: id, "otsProgramadas.numeroOT": numeroOT, "otsProgramadas.dia": dia },
-      { $set: setFields },
-      {
-        arrayFilters: [{ "ot.numeroOT": numeroOT, "ot.dia": dia }],
-        new: true,
-        runValidators: true,
-      }
-    ).lean();
-
-    if (!programa) return Response.json({ ok: false, error: "OT no encontrada" }, { status: 404 });
-    return Response.json({ ok: true, programa: { ...programa, _id: String(programa._id) } });
+    const programa = await prisma.programacionSemanal.findUnique({ where: { id }, include });
+    if (!programa) return Response.json({ ok: false, error: "No encontrado" }, { status: 404 });
+    return Response.json({ ok: true, programa: serialize(programa as Record<string, unknown>) });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Error interno";
     return Response.json({ ok: false, error: message }, { status: 400 });

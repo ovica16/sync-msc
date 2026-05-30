@@ -371,6 +371,32 @@ model CatalogoCausa {
   descripcion String @default("")
 }
 
+// ─── PATRONES DE CALIBRACIÓN ─────────────────────────────────────────────────
+
+model Patron {
+  id                     String   @id @default(cuid())
+  codigo                 String   @unique
+  descripcion            String
+  tipo                   String
+  marca                  String
+  modelo                 String
+  numeroSerie            String
+  fechaUltimaCalibracion DateTime
+  fechaVencimiento       DateTime
+  frecuenciaCalibracion  String
+  rangoMin               Float?
+  rangoMax               Float?
+  precision              String?
+  ubicacion              String?
+  responsable            String?
+  certificadoUrl         String?
+  activo                 Boolean  @default(true)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@index([fechaVencimiento, activo])
+}
+
 // ─── CONTADOR (reemplaza el autoincrement de MongoDB) ─────────────────────────
 
 model Contador {

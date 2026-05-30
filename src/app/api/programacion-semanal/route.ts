@@ -1,102 +1,131 @@
-import { connectDB } from "@/lib/db";
-import { ProgramacionSemanal } from "@/lib/models/ProgramacionSemanal";
+import { prisma } from "@/lib/prisma";
 import { NextRequest } from "next/server";
 
+function serializePrograma(p: Record<string, unknown> & {
+  otsProgramadas?: Record<string, unknown>[];
+  personal?: Record<string, unknown>[];
+  resumenDias?: Record<string, unknown>[];
+}) {
+  return {
+    _id: p.id,
+    semana: p.semana, anio: p.anio, disciplina: p.disciplina,
+    areaCodigo: p.areaCodigo, estado: p.estado, subidoPor: p.subidoPor,
+    fechaInicio: p.fechaInicio, fechaFin: p.fechaFin,
+    hhDisponiblesSemana: p.hhDisponiblesSemana,
+    hhProgramadasSemana: p.hhProgramadasSemana,
+    hhReactivoSemana: p.hhReactivoSemana,
+    otsProgramadas: (p.otsProgramadas ?? []).map((o) => ({
+      numeroOT: o.numeroOT, tipoOT: o.tipoOT, tipoTrabajo: o.tipoTrabajo,
+      prioridad: o.prioridad, descripcion: o.descripcion, tag: o.tag,
+      descripcionEquipo: o.descripcionEquipo, personas: o.personas,
+      hrsTrabajo: o.hrsTrabajo, hhTotal: o.hhTotal,
+      personalAsignado: o.personalAsignado, grupo: o.grupo, dia: o.dia,
+      estado: o.estado, observaciones: o.observaciones,
+      ordenTrabajoId: o.ordenTrabajoId, ordenTrabajoNum: o.ordenTrabajoNum,
+      pasarNoche: o.pasarNoche, pasarNocheMotivo: o.pasarNocheMotivo,
+      pasarNocheNota: o.pasarNocheNota, pasarNochePor: o.pasarNochePor,
+      pasarNocheAt: o.pasarNocheAt, esGuardia: o.esGuardia,
+    })),
+    personal: (p.personal ?? []).map((per) => ({
+      usuarioId: per.usuarioId, nombre: per.nombre, grupo: per.grupo,
+      esContratista: per.esContratista, asistencia: per.asistencia,
+    })),
+    resumenDias: p.resumenDias ?? [],
+    createdAt: p.createdAt, updatedAt: p.updatedAt,
+  };
+}
+
 export async function GET(req: NextRequest) {
-  await connectDB();
   const { searchParams } = new URL(req.url);
   const semana     = searchParams.get("semana");
   const anio       = searchParams.get("anio");
   const disciplina = searchParams.get("disciplina");
   const estado     = searchParams.get("estado");
+  const areaCodigo = searchParams.get("areaCodigo");
   const limit      = Math.min(Number(searchParams.get("limit") || "20"), 100);
 
-  const areaCodigo = searchParams.get("areaCodigo");
+  const programas = await prisma.programacionSemanal.findMany({
+    where: {
+      ...(semana     ? { semana: Number(semana) } : {}),
+      ...(anio       ? { anio: Number(anio) }     : {}),
+      ...(disciplina ? { disciplina }              : {}),
+      ...(areaCodigo ? { areaCodigo }              : {}),
+      ...(estado     ? { estado }                  : {}),
+    },
+    include: {
+      otsProgramadas: true,
+      personal: true,
+      resumenDias: true,
+    },
+    orderBy: [{ anio: "desc" }, { semana: "desc" }],
+    take: limit,
+  });
 
-  const filter: Record<string, unknown> = {};
-  if (semana)     filter.semana = Number(semana);
-  if (anio)       filter.anio = Number(anio);
-  if (disciplina) filter.disciplina = disciplina;
-  if (areaCodigo) filter.areaCodigo = areaCodigo;
-  if (estado)     filter.estado = estado;
-
-  const programas = await ProgramacionSemanal.find(filter)
-    .sort({ anio: -1, semana: -1 })
-    .limit(limit)
-    .lean();
-
-  return Response.json(programas.map((p) => ({ ...p, _id: String(p._id) })));
+  return Response.json(programas.map(p => serializePrograma(p as Parameters<typeof serializePrograma>[0])));
 }
 
 export async function POST(req: NextRequest) {
   try {
-    await connectDB();
     const body = await req.json();
-    const {
-      semana, anio, disciplina, areaCodigo,
-      fechaInicio, fechaFin,
-      personal, otsProgramadas,
-      subidoPor,
-    } = body;
+    const { semana, anio, disciplina, areaCodigo, fechaInicio, fechaFin,
+            personal, otsProgramadas, subidoPor } = body;
 
-    // Calcular métricas agregadas
-    let hhDisponiblesSemana = 0;
-    let hhProgramadasSemana = 0;
-    let hhReactivoSemana = 0;
+    let hhDisponiblesSemana = 0, hhProgramadasSemana = 0, hhReactivoSemana = 0;
+    const diasKeys = ["Lu","Ma","Mi","Ju","Vi","Sa","Do"] as const;
 
-    const diasKeys = ["Lu", "Ma", "Mi", "Ju", "Vi", "Sa", "Do"] as const;
-    const resumenDias = diasKeys.map((dia, i) => {
+    const resumenDiasData = diasKeys.map((dia, i) => {
       const fechaDia = new Date(fechaInicio);
       fechaDia.setDate(fechaDia.getDate() + i);
-
-      const otsDelDia = (otsProgramadas ?? []).filter(
-        (o: { dia: string; hhTotal: number; tipoOT: string }) => o.dia === dia
-      );
-      const hhProg = otsDelDia.reduce(
-        (s: number, o: { hhTotal: number }) => s + (o.hhTotal ?? 0), 0
-      );
-      const hhReact = otsDelDia
-        .filter((o: { tipoOT: string }) => o.tipoOT === "C")
-        .reduce((s: number, o: { hhTotal: number }) => s + (o.hhTotal ?? 0), 0);
-
-      // HH disponibles: personal activo (D o N) × 10 hrs
-      const activos = (personal ?? []).filter((p: { asistencia: { dia: string; estado: string }[] }) =>
-        p.asistencia?.find(
-          (a: { dia: string; estado: string }) => a.dia === dia && (a.estado === "D" || a.estado === "N" || a.estado === "T")
-        )
+      const otsDelDia = (otsProgramadas ?? []).filter((o: { dia: string }) => o.dia === dia);
+      const hhProg  = otsDelDia.reduce((s: number, o: { hhTotal?: number }) => s + (o.hhTotal ?? 0), 0);
+      const hhReact = otsDelDia.filter((o: { tipoOT: string }) => o.tipoOT === "C")
+                               .reduce((s: number, o: { hhTotal?: number }) => s + (o.hhTotal ?? 0), 0);
+      const activos = (personal ?? []).filter((p: { asistencia?: { dia: string; estado: string }[] }) =>
+        p.asistencia?.some((a) => a.dia === dia && ["D","N","T"].includes(a.estado))
       ).length;
       const hhDisp = activos * 10;
-
       hhDisponiblesSemana += hhDisp;
       hhProgramadasSemana += hhProg;
-      hhReactivoSemana += hhReact;
-
-      return {
-        dia,
-        fecha: fechaDia,
-        hhDisponibles: hhDisp,
-        hhProgramadas: hhProg,
-        utilizacion: hhDisp > 0 ? Math.round((hhProg / hhDisp) * 100) : 0,
-      };
+      hhReactivoSemana    += hhReact;
+      return { dia, fecha: fechaDia, hhDisponibles: hhDisp, hhProgramadas: hhProg,
+               utilizacion: hhDisp > 0 ? Math.round((hhProg / hhDisp) * 100) : 0 };
     });
 
-    const programa = new ProgramacionSemanal({
-      semana, anio, disciplina, areaCodigo,
-      fechaInicio, fechaFin,
-      personal: personal ?? [],
-      otsProgramadas: otsProgramadas ?? [],
-      resumenDias,
-      hhDisponiblesSemana,
-      hhProgramadasSemana,
-      hhReactivoSemana,
-      estado: "borrador",
-      subidoPor,
+    const programa = await prisma.programacionSemanal.create({
+      data: {
+        semana, anio, disciplina, areaCodigo: areaCodigo || null,
+        fechaInicio: new Date(fechaInicio), fechaFin: new Date(fechaFin),
+        hhDisponiblesSemana, hhProgramadasSemana, hhReactivoSemana,
+        estado: "borrador", subidoPor,
+        otsProgramadas: {
+          create: (otsProgramadas ?? []).map((o: Record<string, unknown>) => ({
+            numeroOT: String(o.numeroOT), tipoOT: String(o.tipoOT),
+            tipoTrabajo: String(o.tipoTrabajo), prioridad: (o.prioridad as string) ?? null,
+            descripcion: String(o.descripcion), tag: String(o.tag).toUpperCase(),
+            descripcionEquipo: (o.descripcionEquipo as string) ?? "",
+            personas: Number(o.personas ?? 1), hrsTrabajo: Number(o.hrsTrabajo ?? 0),
+            hhTotal: Number(o.hhTotal ?? 0),
+            personalAsignado: (o.personalAsignado as string[]) ?? [],
+            grupo: String(o.grupo), dia: String(o.dia),
+            estado: (o.estado as string) ?? "no_iniciada",
+            esGuardia: Boolean(o.esGuardia),
+          })),
+        },
+        personal: {
+          create: (personal ?? []).map((p: Record<string, unknown>) => ({
+            usuarioId: (p.usuarioId as string) ?? null,
+            nombre: String(p.nombre), grupo: String(p.grupo),
+            esContratista: Boolean(p.esContratista),
+            asistencia: (p.asistencia as object) ?? [],
+          })),
+        },
+        resumenDias: { create: resumenDiasData },
+      },
+      include: { otsProgramadas: true, personal: true, resumenDias: true },
     });
 
-    await programa.save();
-    const saved = programa.toObject();
     return Response.json(
-      { ok: true, programa: { ...saved, _id: String(saved._id) } },
+      { ok: true, programa: serializePrograma(programa as Parameters<typeof serializePrograma>[0]) },
       { status: 201 }
     );
   } catch (err: unknown) {

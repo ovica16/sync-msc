@@ -1,5 +1,4 @@
-import { connectDB } from "@/lib/db";
-import { ProgramacionSemanal } from "@/lib/models/ProgramacionSemanal";
+import { prisma } from "@/lib/prisma";
 import { NextRequest } from "next/server";
 
 // Mapeo día JS (0=Dom) → abreviatura del plan
@@ -28,16 +27,15 @@ export async function GET(req: NextRequest) {
       return Response.json({ error: "fecha y turno requeridos" }, { status: 400 });
     }
 
-    await connectDB();
-
-    const date = new Date(fecha + "T12:00:00Z"); // Noon UTC para evitar offset
+    const date = new Date(fecha + "T12:00:00Z");
     const dia  = JS_DIA[date.getUTCDay()];
     const { semana, anio } = isoWeek(date);
-
     const grupos = turno === "Nocturno" ? GRUPOS_NOCTURNO : GRUPOS_DIURNO;
 
-    // Traer todas las disciplinas de esa semana
-    const programas = await ProgramacionSemanal.find({ semana, anio }).lean();
+    const programas = await prisma.programacionSemanal.findMany({
+      where: { semana, anio },
+      include: { otsProgramadas: true },
+    });
 
     type OTProg = {
       numeroOT: string; tipoOT: string; tag: string; descripcionEquipo?: string;

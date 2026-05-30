@@ -1,51 +1,67 @@
-import { connectDB } from "@/lib/db";
-import { RegistroCalibracion } from "@/lib/models/RegistroCalibracion";
-import { Contador } from "@/lib/models/Contador";
+import { prisma } from "@/lib/prisma";
 import { NextRequest } from "next/server";
 
+async function siguienteCertificado(): Promise<string> {
+  const yy = String(new Date().getFullYear()).slice(-2);
+  const counter = await prisma.contador.upsert({
+    where: { nombre: "calibracion" },
+    update: { valor: { increment: 1 } },
+    create: { nombre: "calibracion", valor: 1 },
+  });
+  return `INS-CAL-${yy}-${String(counter.valor).padStart(4, "0")}`;
+}
+
 export async function GET(req: NextRequest) {
-  await connectDB();
   const { searchParams } = new URL(req.url);
-  const tag = searchParams.get("tag");
+  const tag       = searchParams.get("tag");
   const resultado = searchParams.get("resultado");
-  const limit = Math.min(Number(searchParams.get("limit") || "50"), 200);
+  const limit     = Math.min(Number(searchParams.get("limit") || "50"), 200);
 
-  const filter: Record<string, unknown> = {};
-  if (tag) filter.tag = { $regex: tag, $options: "i" };
-  if (resultado) filter.resultadoGeneral = resultado;
+  const registros = await prisma.registroCalibracion.findMany({
+    where: {
+      ...(tag       ? { tag: { contains: tag, mode: "insensitive" } } : {}),
+      ...(resultado ? { resultadoGeneral: resultado } : {}),
+    },
+    orderBy: { fecha: "desc" },
+    take: limit,
+  });
 
-  const registros = await RegistroCalibracion.find(filter)
-    .sort({ fecha: -1 })
-    .limit(limit)
-    .lean();
-
-  return Response.json(registros.map((r) => ({ ...r, _id: String(r._id) })));
+  return Response.json(registros.map(r => ({ ...r, _id: r.id })));
 }
 
 export async function POST(req: NextRequest) {
   try {
-    await connectDB();
     const body = await req.json();
+    const numeroCertificado = await siguienteCertificado();
 
-    const yy = String(new Date().getFullYear()).slice(-2);
-    const counter = await Contador.findOneAndUpdate(
-      { _id: "calibracion" },
-      { $inc: { seq: 1 } },
-      { new: true, upsert: true }
-    );
-    const seq = String(counter.seq).padStart(4, "0");
-    const numeroCertificado = `INS-CAL-${yy}-${seq}`;
-
-    const registro = new RegistroCalibracion({
-      ...body,
-      numeroCertificado,
-      areaCodigo: "3320",
+    const registro = await prisma.registroCalibracion.create({
+      data: {
+        numeroCertificado,
+        tag: String(body.tag).toUpperCase(),
+        descripcionInstrumento: body.descripcionInstrumento,
+        tipoVariable: body.tipoVariable,
+        patronIds: body.patronIds ?? [],
+        patronCodigos: body.patronCodigos ?? [],
+        tecnicoId: body.tecnicoId,
+        tecnicoNombre: body.tecnicoNombre,
+        supervisorId: body.supervisorId ?? null,
+        supervisorNombre: body.supervisorNombre ?? null,
+        fecha: new Date(body.fecha),
+        temperatura: body.temperatura ?? null,
+        humedad: body.humedad ?? null,
+        turno: body.turno ?? null,
+        unidad: body.unidad ?? null,
+        puntos: body.puntos,
+        puntosAntes: body.puntosAntes ?? [],
+        resultadoGeneral: body.resultadoGeneral,
+        observaciones: body.observaciones ?? null,
+        otAsociada: body.otAsociada ?? null,
+        areaCodigo: "3320",
+      },
     });
 
-    await registro.save();
-    const saved = registro.toObject();
     return Response.json(
-      { ok: true, registro: { ...saved, _id: String(saved._id) } },
+      { ok: true, registro: { ...registro, _id: registro.id } },
       { status: 201 }
     );
   } catch (err: unknown) {

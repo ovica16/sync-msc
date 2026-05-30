@@ -1,8 +1,6 @@
-import { connectDB } from "@/lib/db";
-import { CatalogoModo } from "@/lib/models/ArbolFallas";
+import { prisma } from "@/lib/prisma";
 
 export async function GET() {
-  await connectDB();
-  const modos = await CatalogoModo.find({}).sort({ codigo: 1 }).lean();
+  const modos = await prisma.catalogoModo.findMany({ orderBy: { codigo: "asc" } });
   return Response.json(modos);
 }
