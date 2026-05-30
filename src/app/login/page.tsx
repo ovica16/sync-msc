@@ -54,7 +54,7 @@ export default function LoginPage() {
     >
       <div style={{ marginBottom: 12 }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/Logo1.png" alt="Sync MSC" style={{ width: 110, height: 110, objectFit: "contain" }} />
+        <img src="/logo1.png" alt="Sync MSC" style={{ width: 110, height: 110, objectFit: "contain" }} />
       </div>
 
       <p style={{ color: "rgba(255,255,255,0.55)", fontSize: 13, marginBottom: 40, letterSpacing: "0.04em" }}>

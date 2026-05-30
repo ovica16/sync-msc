@@ -39,7 +39,7 @@ export default function AppHeader({ backHref }: Props) {
 
       <Link href="/inicio" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/Logo1.png" alt="Sync MSC" style={{ width: 38, height: 38, objectFit: "contain" }} />
+        <img src="/logo1.png" alt="Sync MSC" style={{ width: 38, height: 38, objectFit: "contain" }} />
         <div>
           <div style={{ fontWeight: 800, fontSize: 15, color: "#0f2847", letterSpacing: "0.03em" }}>
             Sync MSC <span style={{ fontSize: 10, fontWeight: 500, color: "#64748b" }}>MP</span>
