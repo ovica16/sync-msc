@@ -1,19 +1,31 @@
-import { connectDB } from "@/lib/db";
-import { Usuario } from "@/lib/models/Usuario";
+import { prisma } from "@/lib/prisma";
 import { NextRequest } from "next/server";
 
 type Ctx = { params: Promise<{ id: string }> };
 
 export async function PUT(req: NextRequest, { params }: Ctx) {
   const { id } = await params;
-  await connectDB();
   try {
     const body = await req.json();
-    // Never allow password change via this route
+    // Nunca permitir cambio de password por esta ruta
     delete body.passwordHash;
     delete body.password;
-    const user = await Usuario.findByIdAndUpdate(id, body, { new: true });
-    if (!user) return Response.json({ error: "Not found" }, { status: 404 });
+
+    const { areas, ...rest } = body;
+
+    await prisma.usuario.update({
+      where: { id },
+      data: {
+        ...rest,
+        ...(areas !== undefined ? {
+          areas: {
+            deleteMany: {},
+            create: areas.map((codigo: string) => ({ areaCodigo: codigo })),
+          },
+        } : {}),
+      },
+    });
+
     return Response.json({ ok: true });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Error interno";
@@ -23,7 +35,6 @@ export async function PUT(req: NextRequest, { params }: Ctx) {
 
 export async function DELETE(_req: NextRequest, { params }: Ctx) {
   const { id } = await params;
-  await connectDB();
-  await Usuario.findByIdAndUpdate(id, { activo: false });
+  await prisma.usuario.update({ where: { id }, data: { activo: false } });
   return Response.json({ ok: true });
 }

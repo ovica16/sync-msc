@@ -1,37 +1,29 @@
-import { connectDB } from "@/lib/db";
-import { ArbolFallas } from "@/lib/models/ArbolFallas";
+import { prisma } from "@/lib/prisma";
 import { NextRequest } from "next/server";
 
 export async function GET(req: NextRequest) {
-  await connectDB();
   const { searchParams } = new URL(req.url);
   const tipoEquipo = searchParams.get("tipoEquipo");
-  const sintoma = searchParams.get("sintoma");
-  const admin = searchParams.get("admin") === "true";
-
-  // Admin/config mode: return all entries as full objects
-  if (admin) {
-    const entries = await ArbolFallas.find({})
-      .select("_id tipoEquipo sintoma codigoModo causaProbable codigoCausa resolucionSugerida tiempoEstimadoHrs activo")
-      .sort({ tipoEquipo: 1, sintoma: 1 })
-      .lean();
-    return Response.json(entries);
-  }
-
+  const sintoma    = searchParams.get("sintoma");
   const codigoModo = searchParams.get("codigoModo");
-  const filter: Record<string, unknown> = { activo: true };
+  const admin      = searchParams.get("admin") === "true";
 
-  if (tipoEquipo) {
-    filter.$or = [{ tipoEquipo }, { tipoEquipo: null }];
+  if (admin) {
+    const entries = await prisma.arbolFallas.findMany({
+      orderBy: [{ tipoEquipo: "asc" }, { sintoma: "asc" }],
+    });
+    return Response.json(entries.map(e => ({ ...e, _id: e.id })));
   }
-  if (sintoma) filter.sintoma = sintoma;
-  if (codigoModo) filter.codigoModo = codigoModo;
 
-  const entries = await ArbolFallas.find(filter)
-    .select("tipoEquipo sintoma codigoModo causaProbable codigoCausa resolucionSugerida tiempoEstimadoHrs")
-    .lean();
+  const entries = await prisma.arbolFallas.findMany({
+    where: {
+      activo: true,
+      ...(tipoEquipo ? { OR: [{ tipoEquipo }, { tipoEquipo: null }] } : {}),
+      ...(sintoma    ? { sintoma } : {}),
+      ...(codigoModo ? { codigoModo } : {}),
+    },
+  });
 
-  // Sin filtros de detalle: devuelve lista de modos únicos (código + sintoma)
   if (!sintoma && !codigoModo) {
     const seen = new Set<string>();
     const modos = entries
@@ -46,11 +38,19 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    await connectDB();
     const body = await req.json();
-    if (body.tipoEquipo === "" || body.tipoEquipo === undefined) body.tipoEquipo = null;
-    const entry = new ArbolFallas({ ...body, creadoPor: body.creadoPor ?? "admin" });
-    await entry.save();
+    const entry = await prisma.arbolFallas.create({
+      data: {
+        tipoEquipo: body.tipoEquipo || null,
+        sintoma: body.sintoma,
+        codigoModo: body.codigoModo || null,
+        causaProbable: body.causaProbable,
+        codigoCausa: body.codigoCausa || null,
+        resolucionSugerida: body.resolucionSugerida ?? "",
+        tiempoEstimadoHrs: body.tiempoEstimadoHrs ?? 0,
+        creadoPor: body.creadoPor ?? "admin",
+      },
+    });
     return Response.json({ ok: true, entry }, { status: 201 });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Error interno";

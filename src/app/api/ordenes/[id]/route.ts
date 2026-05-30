@@ -1,18 +1,65 @@
-import { connectDB } from "@/lib/db";
-import { OrdenTrabajo } from "@/lib/models/OrdenTrabajo";
-import { ProgramacionSemanal } from "@/lib/models/ProgramacionSemanal";
+import { prisma } from "@/lib/prisma";
 import { NextRequest } from "next/server";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-function serialize(ot: Record<string, unknown>) {
-  return { ...ot, _id: String(ot._id) };
+const include = {
+  tecnicos: true,
+  lineas: true,
+  historial: { orderBy: { fechaHora: "asc" as const } },
+  registrosDiarios: { orderBy: { fecha: "asc" as const } },
+};
+
+function serializeOT(ot: Record<string, unknown> & {
+  tecnicos?: { usuarioId?: string | null; nombreCompleto: string }[];
+  lineas?: Record<string, unknown>[];
+  historial?: Record<string, unknown>[];
+  registrosDiarios?: Record<string, unknown>[];
+}) {
+  return {
+    _id: ot.id,
+    numeroOT: ot.numeroOT,
+    fecha: ot.fecha,
+    turno: ot.turno,
+    areaCodigo: ot.areaCodigo,
+    estado: ot.estado,
+    origenPlan: ot.origenPlan,
+    programacionSemanalId: ot.programacionSemanalId,
+    otJdeNumero: ot.otJdeNumero,
+    otJdeDia: ot.otJdeDia,
+    createdAt: ot.createdAt,
+    tecnicos: (ot.tecnicos ?? []).map(t => ({
+      usuarioId: t.usuarioId ?? "",
+      nombreCompleto: t.nombreCompleto,
+    })),
+    lineas: (ot.lineas ?? []).map(l => ({
+      tag: l.tag, descripcionEquipo: l.descripcionEquipo, tipoOT: l.tipoOT,
+      sintoma: l.sintoma, causaProbable: l.causaProbable, resolucionAplicada: l.resolucionAplicada,
+      tiempoEstimadoHrs: l.tiempoEstimadoHrs, tiempoRealHrs: l.tiempoRealHrs,
+      descripcionTrabajo: l.descripcionTrabajo, tareasEjecutadas: l.tareasEjecutadas,
+      observaciones: l.observaciones,
+    })),
+    historialCambios: (ot.historial ?? []).map(h => ({
+      fechaHora: h.fechaHora, usuarioId: h.usuarioId,
+      nombreUsuario: h.nombreUsuario, cambio: h.cambio,
+    })),
+    registrosDiarios: (ot.registrosDiarios ?? []).map(r => ({
+      _id: r.id, fecha: r.fecha, tecnico: r.tecnico, usuarioId: r.usuarioId,
+      hhTrabajadas: r.hhTrabajadas, tareasEjecutadas: r.tareas, observaciones: r.observaciones,
+    })),
+    datosSupervision: {
+      codigoModoFallaISO: ot.supCodigoModoFallaISO,
+      clasificacionRCM: ot.supClasificacionRCM,
+      comentariosSupervisor: ot.supComentarios,
+      requierePlanificacion: ot.supRequierePlan,
+      revisadoPor: ot.supRevisadoPor,
+      revisadoEn: ot.supRevisadoEn,
+    },
+  };
 }
 
-// Mapeo de estado OT interna → estado en el plan semanal
 function mapEstadoAlPlan(estado: string): string {
   switch (estado) {
-    case "borrador":             return "en_proceso";
     case "pendiente_revision":   return "completada";
     case "solicitar_correccion": return "en_revision";
     case "revisado":             return "completada";
@@ -21,112 +68,102 @@ function mapEstadoAlPlan(estado: string): string {
   }
 }
 
-// Propagar cambio de estado al plan semanal vinculado
-async function propagarAlPlan(
-  programacionSemanalId: string,
-  otJdeNumero: string,
-  otJdeDia: string | undefined,
-  estadoOT: string
-) {
-  const estadoPlan = mapEstadoAlPlan(estadoOT);
-  const filter: Record<string, unknown> = {
-    _id: programacionSemanalId,
-    "otsProgramadas.numeroOT": otJdeNumero,
-  };
-  if (otJdeDia) filter["otsProgramadas.dia"] = otJdeDia;
-
-  const arrayFilter = otJdeDia
-    ? [{ "ot.numeroOT": otJdeNumero, "ot.dia": otJdeDia }]
-    : [{ "ot.numeroOT": otJdeNumero }];
-
-  await ProgramacionSemanal.findOneAndUpdate(
-    filter,
-    { $set: { "otsProgramadas.$[ot].estado": estadoPlan } },
-    { arrayFilters: arrayFilter }
-  );
-}
-
 export async function GET(_req: NextRequest, { params }: Ctx) {
   const { id } = await params;
-  await connectDB();
-  const ot = await OrdenTrabajo.findById(id).lean();
+  const ot = await prisma.ordenTrabajo.findUnique({ where: { id }, include });
   if (!ot) return Response.json({ error: "No encontrado" }, { status: 404 });
-  return Response.json(serialize(ot as Record<string, unknown>));
+  return Response.json(serializeOT(ot as Parameters<typeof serializeOT>[0]));
 }
 
 export async function PATCH(req: NextRequest, { params }: Ctx) {
   try {
     const { id } = await params;
-    await connectDB();
     const body = await req.json();
     const { estado, datosSupervision, cambio, cambios, lineas, registroDiario, usuarioId, nombreUsuario } = body;
 
-    const ot = await OrdenTrabajo.findById(id);
-    if (!ot) return Response.json({ error: "No encontrado" }, { status: 404 });
-
-    if (estado) ot.estado = estado;
-
-    if (lineas) {
-      ot.lineas = lineas;
-      ot.markModified("lineas");
-    }
-
-    // ── Agregar avance diario ──
-    if (registroDiario) {
-      if (!ot.registrosDiarios) ot.registrosDiarios = [];
-      ot.registrosDiarios.push({
-        fecha:            new Date(registroDiario.fecha),
-        tecnico:          registroDiario.tecnico,
-        usuarioId:        registroDiario.usuarioId ?? usuarioId,
-        hhTrabajadas:     registroDiario.hhTrabajadas,
-        tareasEjecutadas: registroDiario.tareasEjecutadas ?? [],
-        observaciones:    registroDiario.observaciones ?? "",
-      });
-      ot.markModified("registrosDiarios");
-      // Pasar a en_proceso si estaba no iniciada
-      if ((ot.estado as string) === "no_iniciada") ot.estado = "borrador";
-    }
+    const updateData: Record<string, unknown> = {};
+    if (estado) updateData.estado = estado;
 
     if (datosSupervision) {
-      for (const [k, v] of Object.entries(datosSupervision)) {
-        (ot.datosSupervision as Record<string, unknown>)[k] = v;
-      }
+      if (datosSupervision.clasificacionRCM)    updateData.supClasificacionRCM    = datosSupervision.clasificacionRCM;
+      if (datosSupervision.codigoModoFallaISO)  updateData.supCodigoModoFallaISO  = datosSupervision.codigoModoFallaISO;
+      if (datosSupervision.comentariosSupervisor) updateData.supComentarios        = datosSupervision.comentariosSupervisor;
+      if (datosSupervision.requierePlanificacion !== undefined) updateData.supRequierePlan = datosSupervision.requierePlanificacion;
       if (estado === "revisado" || estado === "concluido") {
-        ot.datosSupervision.revisadoPor = usuarioId || "supervisor";
-        ot.datosSupervision.revisadoEn = new Date();
+        updateData.supRevisadoPor = usuarioId || "supervisor";
+        updateData.supRevisadoEn  = new Date();
       }
-      ot.markModified("datosSupervision");
     }
 
-    const mensajes: string[] = Array.isArray(cambios) ? cambios : cambio ? [cambio] : [];
-    const now = new Date();
-    for (const msg of mensajes) {
-      ot.historialCambios.push({
-        fechaHora: now,
-        usuarioId: usuarioId || "system",
-        nombreUsuario: nombreUsuario || "Sistema",
-        cambio: msg,
+    // Actualizar lineas: delete + recreate
+    if (lineas) {
+      await prisma.otLinea.deleteMany({ where: { ordenTrabajoId: id } });
+      await prisma.otLinea.createMany({
+        data: lineas.map((l: Record<string, unknown>) => ({
+          ordenTrabajoId: id,
+          tag: String(l.tag).toUpperCase(),
+          descripcionEquipo: String(l.descripcionEquipo ?? ""),
+          tipoOT: String(l.tipoOT),
+          sintoma: l.sintoma as string | null ?? null,
+          causaProbable: l.causaProbable as string | null ?? null,
+          resolucionAplicada: l.resolucionAplicada as string | null ?? null,
+          tiempoEstimadoHrs: l.tiempoEstimadoHrs as number | null ?? null,
+          tiempoRealHrs: l.tiempoRealHrs as number | null ?? null,
+          descripcionTrabajo: l.descripcionTrabajo as string | null ?? null,
+          tareasEjecutadas: (l.tareasEjecutadas as string[]) ?? [],
+          observaciones: l.observaciones as string | null ?? null,
+        })),
       });
     }
 
-    await ot.save();
-
-    // ── Propagar al plan semanal si esta OT viene del plan ──
-    if (estado && ot.origenPlan && ot.programacionSemanalId && ot.otJdeNumero) {
-      try {
-        await propagarAlPlan(
-          ot.programacionSemanalId,
-          ot.otJdeNumero,
-          ot.otJdeDia ?? undefined,
-          estado
-        );
-      } catch {
-        // Propagar es best-effort — no falla la operación principal
-      }
+    // Agregar avance diario
+    if (registroDiario) {
+      await prisma.otRegistroDiario.create({
+        data: {
+          ordenTrabajoId: id,
+          fecha: new Date(registroDiario.fecha),
+          tecnico: registroDiario.tecnico,
+          usuarioId: registroDiario.usuarioId ?? usuarioId ?? null,
+          hhTrabajadas: registroDiario.hhTrabajadas,
+          tareas: registroDiario.tareasEjecutadas ?? [],
+          observaciones: registroDiario.observaciones ?? null,
+        },
+      });
     }
 
-    const saved = ot.toObject();
-    return Response.json({ ok: true, ot: serialize(saved as Record<string, unknown>) });
+    // Historial
+    const mensajes: string[] = Array.isArray(cambios) ? cambios : cambio ? [cambio] : [];
+    if (mensajes.length > 0) {
+      await prisma.otHistorial.createMany({
+        data: mensajes.map(msg => ({
+          ordenTrabajoId: id,
+          fechaHora: new Date(),
+          usuarioId: usuarioId || "system",
+          nombreUsuario: nombreUsuario || "Sistema",
+          cambio: msg,
+        })),
+      });
+    }
+
+    const ot = await prisma.ordenTrabajo.update({
+      where: { id },
+      data: updateData,
+      include,
+    });
+
+    // Propagar al plan semanal
+    if (estado && ot.origenPlan && ot.programacionSemanalId && ot.otJdeNumero) {
+      await prisma.otProgramada.updateMany({
+        where: {
+          programacionSemanalId: ot.programacionSemanalId,
+          numeroOT: ot.otJdeNumero,
+          ...(ot.otJdeDia ? { dia: ot.otJdeDia } : {}),
+        },
+        data: { estado: mapEstadoAlPlan(estado) },
+      });
+    }
+
+    return Response.json({ ok: true, ot: serializeOT(ot as Parameters<typeof serializeOT>[0]) });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Error interno";
     return Response.json({ ok: false, error: message }, { status: 400 });
