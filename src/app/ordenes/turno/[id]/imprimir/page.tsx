@@ -1,112 +1,72 @@
 import { notFound } from "next/navigation";
-import { connectDB } from "@/lib/db";
-import { ReporteTurno } from "@/lib/models/ReporteTurno";
-import { OrdenTrabajo } from "@/lib/models/OrdenTrabajo";
-import { ProgramacionSemanal } from "@/lib/models/ProgramacionSemanal";
+import { prisma } from "@/lib/prisma";
 import PrintClient from "./PrintClient";
 
-const JS_DIA = ["Do", "Lu", "Ma", "Mi", "Ju", "Vi", "Sa"] as const;
-const GRUPOS_DIURNO = ["G1", "G2", "G3", "G4", "Diurno"];
+const GRUPOS_DIURNO  = ["G1", "G2", "G3", "G4", "Diurno"];
 const GRUPOS_NOCTURNO = ["Nocturno"];
-
-function isoWeek(date: Date) {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  const day = d.getUTCDay() || 7;
-  d.setUTCDate(d.getUTCDate() + 4 - day);
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  return { semana: Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7), anio: d.getUTCFullYear() };
-}
 
 type Params = { params: Promise<{ id: string }> };
 
+type OTDisplay = {
+  id: string; numeroOT: string; tag: string; disciplina: string;
+  tipoOT: string; descripcion: string; tecnicos: string[];
+  hhTotal: number; estado: string; critica: boolean; pendiente: boolean;
+  nota: string; heredada: boolean; pasarNocheMotivo?: string;
+};
+
+type OTPlanRaw = {
+  otId?: string; numeroOT: string; tag: string; disciplina?: string;
+  tipoOT: string; descripcion: string; tecnicos?: string[];
+  hhTotal?: number; estado: string; grupo?: string; dia?: string;
+  heredada?: boolean; pasarNocheMotivo?: string;
+};
+
+function areaToDisciplina(area: string) {
+  if (area === "3320") return "INSTRUMENTACION";
+  if (area === "3311" || area === "3319") return "ELECTRICO";
+  return "MECANICO";
+}
+
 export default async function ImprimirReportePage({ params }: Params) {
   const { id } = await params;
-  await connectDB();
-
-  const reporte = await ReporteTurno.findById(id).lean();
+  const reporte = await prisma.reporteTurno.findUnique({ where: { id } });
   if (!reporte) notFound();
 
-  // Fetch OTs internas
+  const criticas  = new Set(reporte.otsCriticas ?? []);
+  const pendientes = new Set(reporte.otsPendientesSiguienteTurno ?? []);
+  const notasArr  = (reporte.notasOTs ?? []) as { otId: string; nota: string }[];
+  const notasMap  = new Map(notasArr.map(n => [n.otId, n.nota]));
+
+  // Fetch OTs internas desde PostgreSQL
   const realIds = (reporte.otIds ?? []).filter((oid: string) => !oid.startsWith("plan-"));
   const ordenesDB = realIds.length
-    ? await OrdenTrabajo.find({ _id: { $in: realIds } })
-        .select("numeroOT lineas tecnicos estado turno")
-        .lean()
+    ? await prisma.ordenTrabajo.findMany({
+        where: { id: { in: realIds } },
+        include: { lineas: true, tecnicos: true },
+      })
     : [];
 
-  // Unificar OTs para el PDF
-  type OTDisplay = {
-    id: string; numeroOT: string; tag: string; disciplina: string;
-    tipoOT: string; descripcion: string; tecnicos: string[];
-    hhTotal: number; estado: string; critica: boolean; pendiente: boolean;
-    nota: string; heredada: boolean; pasarNocheMotivo?: string;
-  };
-
-  const criticas = new Set(reporte.otsCriticas ?? []);
-  const pendientes = new Set(reporte.otsPendientesSiguienteTurno ?? []);
-  const notasMap = new Map((reporte.notasOTs ?? []).map((n: { otId: string; nota: string }) => [n.otId, n.nota]));
-
-  function areaToDisciplina(area: string) {
-    if (area === "3320") return "INSTRUMENTACION";
-    if (area === "3311" || area === "3319") return "ELECTRICO";
-    return "MECANICO";
-  }
-
   const otsInternas: OTDisplay[] = ordenesDB.map((o) => {
-    const linea = (o.lineas as { tag: string; tipoOT: string; tiempoRealHrs?: number; sintoma?: string; descripcionEquipo?: string }[])[0] ?? {};
+    const linea = o.lineas[0];
     return {
-      id: String(o._id),
-      numeroOT: String(o.numeroOT ?? ""),
-      tag: linea.tag ?? "",
-      disciplina: areaToDisciplina(String((o as { areaCodigo?: string }).areaCodigo ?? "")),
-      tipoOT: linea.tipoOT ?? "",
-      descripcion: linea.sintoma ?? linea.descripcionEquipo ?? "",
-      tecnicos: ((o.tecnicos ?? []) as { nombreCompleto: string }[]).map(t => t.nombreCompleto),
-      hhTotal: linea.tiempoRealHrs ?? 0,
-      estado: String(o.estado ?? ""),
-      critica: criticas.has(String(o._id)),
-      pendiente: pendientes.has(String(o._id)),
-      nota: String(notasMap.get(String(o._id)) ?? ""),
+      id: o.id,
+      numeroOT: o.numeroOT,
+      tag: linea?.tag ?? "",
+      disciplina: areaToDisciplina(o.areaCodigo),
+      tipoOT: linea?.tipoOT ?? "",
+      descripcion: linea?.sintoma ?? linea?.descripcionEquipo ?? "",
+      tecnicos: o.tecnicos.map(t => t.nombreCompleto),
+      hhTotal: linea?.tiempoRealHrs ?? 0,
+      estado: o.estado,
+      critica: criticas.has(o.id),
+      pendiente: pendientes.has(o.id),
+      nota: notasMap.get(o.id) ?? "",
       heredada: false,
     };
   });
 
-  type OTPlanRaw = {
-    otId?: string; numeroOT: string; tag: string; disciplina?: string;
-    tipoOT: string; descripcion: string; tecnicos?: string[];
-    personalAsignado?: string[]; hhTotal?: number; hrsTrabajo?: number;
-    estado: string; grupo?: string; dia?: string; pasarNoche?: boolean;
-    heredada?: boolean; pasarNocheMotivo?: string;
-  };
-
-  // Datos del plan guardados en el reporte
-  let otsPlanRaw: OTPlanRaw[] = (reporte.otsPlanData ?? []) as OTPlanRaw[];
-
-  // Fallback para reportes antiguos: solo OTs del DÍA y TURNO del reporte que estén en otIds
-  const planIds = (reporte.otIds ?? []).filter((id: string) => id.startsWith("plan-"));
-  if (otsPlanRaw.length === 0 && planIds.length > 0 && reporte.fecha) {
-    const fechaReporte = new Date(reporte.fecha as Date);
-    const diaReporte = JS_DIA[fechaReporte.getUTCDay()]; // "Lu","Ma",...,"Do"
-    const grupos = String(reporte.turno) === "Nocturno" ? GRUPOS_NOCTURNO : GRUPOS_DIURNO;
-    const { semana, anio } = isoWeek(fechaReporte);
-    const programas = await ProgramacionSemanal.find({ semana, anio }).lean();
-    for (const prog of programas) {
-      const disc = (prog as { disciplina?: string }).disciplina ?? "";
-      for (const ot of (prog.otsProgramadas ?? []) as OTPlanRaw[]) {
-        if (ot.dia !== diaReporte) continue;                    // solo el día del reporte
-        if (!grupos.includes(ot.grupo ?? "")) continue;         // solo el turno correcto
-        const fakeId = `plan-${disc}-${ot.numeroOT}`;
-        if (!planIds.includes(fakeId)) continue;                // solo las seleccionadas
-        otsPlanRaw.push({
-          otId: fakeId, numeroOT: ot.numeroOT, tag: ot.tag ?? "",
-          disciplina: disc, tipoOT: ot.tipoOT ?? "", descripcion: ot.descripcion ?? "",
-          tecnicos: ot.personalAsignado ?? [], hhTotal: ot.hhTotal ?? 0,
-          estado: ot.estado ?? "", heredada: false,
-        });
-      }
-    }
-  }
-
+  // OTs del plan guardadas inline en el reporte
+  const otsPlanRaw: OTPlanRaw[] = (reporte.otsPlanData ?? []) as OTPlanRaw[];
   const otsPlan: OTDisplay[] = otsPlanRaw.map((o) => ({
     id: o.otId ?? `plan-${o.numeroOT}`,
     numeroOT: o.numeroOT,
@@ -117,23 +77,59 @@ export default async function ImprimirReportePage({ params }: Params) {
     tecnicos: o.tecnicos ?? [],
     hhTotal: o.hhTotal ?? 0,
     estado: o.estado ?? "",
-    critica: criticas.has(o.otId ?? ""),
+    critica:  criticas.has(o.otId  ?? ""),
     pendiente: pendientes.has(o.otId ?? ""),
-    nota: String(notasMap.get(o.otId ?? "") ?? ""),
+    nota: notasMap.get(o.otId ?? "") ?? "",
     heredada: o.heredada ?? false,
     pasarNocheMotivo: o.pasarNocheMotivo,
   }));
 
+  // Fallback: si no hay otsPlanData buscar en la programación semanal
+  if (otsPlanRaw.length === 0 && reporte.fecha) {
+    const planIds = (reporte.otIds ?? []).filter((oid: string) => oid.startsWith("plan-"));
+    if (planIds.length > 0) {
+      const fechaReporte = new Date(reporte.fecha);
+      const JS_DIA = ["Do","Lu","Ma","Mi","Ju","Vi","Sa"] as const;
+      const diaReporte = JS_DIA[fechaReporte.getUTCDay()];
+      const grupos = reporte.turno === "Nocturno" ? GRUPOS_NOCTURNO : GRUPOS_DIURNO;
+      const d = new Date(Date.UTC(fechaReporte.getFullYear(), fechaReporte.getMonth(), fechaReporte.getDate()));
+      const day = d.getUTCDay() || 7;
+      d.setUTCDate(d.getUTCDate() + 4 - day);
+      const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+      const semana = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+      const anio = d.getUTCFullYear();
+
+      const programas = await prisma.programacionSemanal.findMany({
+        where: { semana, anio },
+        include: { otsProgramadas: true },
+      });
+      for (const prog of programas) {
+        for (const ot of prog.otsProgramadas) {
+          if (ot.dia !== diaReporte) continue;
+          if (!grupos.includes(ot.grupo)) continue;
+          const fakeId = `plan-${prog.disciplina}-${ot.numeroOT}`;
+          if (!planIds.includes(fakeId)) continue;
+          otsPlan.push({
+            id: fakeId, numeroOT: ot.numeroOT, tag: ot.tag ?? "",
+            disciplina: prog.disciplina, tipoOT: ot.tipoOT ?? "",
+            descripcion: ot.descripcion ?? "", tecnicos: ot.personalAsignado ?? [],
+            hhTotal: ot.hhTotal ?? 0, estado: ot.estado ?? "",
+            critica: criticas.has(fakeId), pendiente: pendientes.has(fakeId),
+            nota: notasMap.get(fakeId) ?? "", heredada: false,
+          });
+        }
+      }
+    }
+  }
+
   const todasOTs = [...otsInternas, ...otsPlan];
 
-  // Mapeo disciplina código → nombre para mostrar
   const DISC_NOMBRE: Record<string, string> = {
     MEC: "MECÁNICO", MECANICO: "MECÁNICO",
     ELEC: "ELÉCTRICO", ELECTRICO: "ELÉCTRICO",
     INST: "INSTRUMENTACIÓN", INSTRUMENTACION: "INSTRUMENTACIÓN",
   };
 
-  // Agrupar por código de disciplina normalizado
   const porDisciplina: Record<string, OTDisplay[]> = {};
   for (const ot of todasOTs) {
     const key = ot.disciplina.toUpperCase();
@@ -142,16 +138,18 @@ export default async function ImprimirReportePage({ params }: Params) {
   }
 
   const reporteData = {
-    _id: String(reporte._id),
-    turno: String(reporte.turno),
-    fecha: reporte.fecha ? new Date(reporte.fecha as Date).toISOString() : "",
-    supervisorNombre: String(reporte.supervisorNombre),
-    estado: String(reporte.estado),
+    _id: reporte.id,
+    turno: reporte.turno,
+    fecha: reporte.fecha ? new Date(reporte.fecha).toISOString() : "",
+    supervisorNombre: reporte.supervisorNombre,
+    estado: reporte.estado,
     resumenEjecutivo: reporte.resumenEjecutivo as {
       totalOTs: number; concluidas: number; pendientes: number;
       inconclusas: number; hhTotales: number; hhCorrectivo: number; hhPreventivo: number;
     },
-    recomendaciones: (reporte.recomendaciones ?? []) as { prioridad: string; area?: string; tag?: string; descripcion: string }[],
+    recomendaciones: (reporte.recomendaciones ?? []) as {
+      prioridad: string; area?: string; tag?: string; descripcion: string;
+    }[],
   };
 
   return (
