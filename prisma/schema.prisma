@@ -1,0 +1,379 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── USUARIOS ─────────────────────────────────────────────────────────────────
+
+model Usuario {
+  id               String   @id @default(cuid())
+  nombre           String
+  apellido         String?
+  email            String?  @unique
+  passwordHash     String?
+  rol              Int      // 1=Admin 2=Sup 3=Supervisor 4=Técnico 5=Planificador
+  disciplina       String   @default("GENERAL") // GENERAL|MEC|ELEC|INST
+  areaTrabajo      String?
+  celular          String?
+  jde              String?
+  puesto           String?
+  superintendencia String?
+  activo           Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  // Relaciones
+  areas            UsuarioArea[]
+
+  @@index([rol, activo])
+  @@index([jde])
+}
+
+model UsuarioArea {
+  usuarioId  String
+  areaCodigo String
+  usuario    Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  area       Area    @relation(fields: [areaCodigo], references: [codigo], onDelete: Cascade)
+
+  @@id([usuarioId, areaCodigo])
+}
+
+// ─── AREAS ────────────────────────────────────────────────────────────────────
+
+model Area {
+  codigo           String  @id
+  nombre           String
+  superintendencia String
+  tieneCalibracion Boolean @default(false)
+  activo           Boolean @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  usuarios         UsuarioArea[]
+  equipos          Equipo[]
+  ordenes          OrdenTrabajo[]
+  programaciones   ProgramacionSemanal[]
+  calibraciones    RegistroCalibracion[]
+}
+
+// ─── EQUIPOS ──────────────────────────────────────────────────────────────────
+
+model Equipo {
+  id                  String   @id @default(cuid())
+  tag                 String   @unique
+  descripcion         String
+  descripcion2        String?
+  descripcion3        String?
+  nivel               Int
+  parentTag           String?
+  nivelPath           String[] // array de strings
+  tipoEquipo          String   @default(".")
+  descripcionTipo     String?
+  subtipo             String?
+  descripcionSubtipo  String?
+  categoriaISO        String?
+  criticidad          String?  // A|B|C
+  centroCosto         String?
+  areaCodigo          String
+  descripcionArea     String?
+  fabricante          String?
+  modelo              String?
+  serie               String?
+  fechaInstalacion    DateTime?
+  vidaUtilEstimadaAnos Int?
+  activo              Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  area                Area     @relation(fields: [areaCodigo], references: [codigo])
+
+  @@index([areaCodigo, nivel, activo])
+  @@index([parentTag])
+  @@index([nivel, tipoEquipo])
+}
+
+// ─── ORDENES DE TRABAJO ───────────────────────────────────────────────────────
+
+model OrdenTrabajo {
+  id                    String   @id @default(cuid())
+  numeroOT              String   @unique
+  fecha                 DateTime
+  turno                 String   // Diurno|Nocturno|Parada de Planta|Planta|Otro
+  areaCodigo            String
+  estado                String   @default("borrador")
+  // Supervisión
+  supCodigoModoFallaISO String?
+  supClasificacionRCM   String?
+  supCriticidadEquipo   String?
+  supLeccionAprendida   String?
+  supRequierePlan       Boolean?
+  supOtRelacionada      String?
+  supComentarios        String?
+  supRevisadoPor        String?
+  supRevisadoEn         DateTime?
+  // Enlace plan semanal
+  origenPlan            Boolean  @default(false)
+  programacionSemanalId String?
+  otJdeNumero           String?
+  otJdeDia              String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  area              Area           @relation(fields: [areaCodigo], references: [codigo])
+  tecnicos          OtTecnico[]
+  lineas            OtLinea[]
+  historial         OtHistorial[]
+  registrosDiarios  OtRegistroDiario[]
+
+  @@index([areaCodigo, estado, fecha(sort: Desc)])
+  @@index([otJdeNumero])
+  @@index([origenPlan, estado])
+}
+
+model OtTecnico {
+  id              String       @id @default(cuid())
+  ordenTrabajoId  String
+  usuarioId       String?
+  nombreCompleto  String
+  ordenTrabajo    OrdenTrabajo @relation(fields: [ordenTrabajoId], references: [id], onDelete: Cascade)
+
+  @@index([ordenTrabajoId])
+  @@index([usuarioId])
+}
+
+model OtLinea {
+  id                 String       @id @default(cuid())
+  ordenTrabajoId     String
+  tag                String
+  descripcionEquipo  String
+  tipoOT             String       // CMP|CMR|PMP|PMT|PTJ
+  sintoma            String?
+  causaProbable      String?
+  resolucionAplicada String?
+  tiempoEstimadoHrs  Float?
+  tiempoRealHrs      Float?
+  descripcionTrabajo String?
+  tareasEjecutadas   String[]
+  observaciones      String?
+  ordenTrabajo       OrdenTrabajo @relation(fields: [ordenTrabajoId], references: [id], onDelete: Cascade)
+
+  @@index([ordenTrabajoId])
+  @@index([tag])
+}
+
+model OtHistorial {
+  id             String       @id @default(cuid())
+  ordenTrabajoId String
+  fechaHora      DateTime     @default(now())
+  usuarioId      String
+  nombreUsuario  String
+  cambio         String
+  ordenTrabajo   OrdenTrabajo @relation(fields: [ordenTrabajoId], references: [id], onDelete: Cascade)
+
+  @@index([ordenTrabajoId])
+}
+
+model OtRegistroDiario {
+  id             String       @id @default(cuid())
+  ordenTrabajoId String
+  fecha          DateTime
+  tecnico        String
+  usuarioId      String?
+  hhTrabajadas   Float
+  tareas         String[]
+  observaciones  String?
+  ordenTrabajo   OrdenTrabajo @relation(fields: [ordenTrabajoId], references: [id], onDelete: Cascade)
+
+  @@index([ordenTrabajoId])
+}
+
+// ─── PROGRAMACIÓN SEMANAL ─────────────────────────────────────────────────────
+
+model ProgramacionSemanal {
+  id                   String   @id @default(cuid())
+  semana               Int
+  anio                 Int
+  disciplina           String   // INST|MEC|ELEC|GENERAL
+  areaCodigo           String?
+  fechaInicio          DateTime
+  fechaFin             DateTime
+  hhDisponiblesSemana  Float    @default(0)
+  hhProgramadasSemana  Float    @default(0)
+  hhReactivoSemana     Float    @default(0)
+  estado               String   @default("borrador") // borrador|publicado|cerrado
+  subidoPor            String
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  area           Area?           @relation(fields: [areaCodigo], references: [codigo])
+  otsProgramadas OtProgramada[]
+  personal       PersonalSemanal[]
+  resumenDias    ResumenDia[]
+
+  @@unique([semana, anio, disciplina])
+  @@index([disciplina, anio, semana(sort: Desc)])
+}
+
+model OtProgramada {
+  id                    String              @id @default(cuid())
+  programacionSemanalId String
+  numeroOT              String
+  tipoOT                String
+  tipoTrabajo           String
+  prioridad             String?
+  descripcion           String
+  tag                   String
+  descripcionEquipo     String?
+  personas              Int      @default(1)
+  hrsTrabajo            Float    @default(0)
+  hhTotal               Float    @default(0)
+  personalAsignado      String[]
+  grupo                 String
+  dia                   String   // Lu|Ma|Mi|Ju|Vi|Sa|Do
+  estado                String   @default("no_iniciada")
+  observaciones         String?
+  ordenTrabajoId        String?
+  ordenTrabajoNum       String?
+  pasarNoche            Boolean  @default(false)
+  pasarNocheMotivo      String?
+  pasarNocheNota        String?
+  pasarNochePor         String?
+  pasarNocheAt          DateTime?
+  esGuardia             Boolean  @default(false)
+  programacion          ProgramacionSemanal @relation(fields: [programacionSemanalId], references: [id], onDelete: Cascade)
+
+  @@index([programacionSemanalId])
+  @@index([numeroOT])
+  @@index([tag])
+}
+
+model PersonalSemanal {
+  id                    String              @id @default(cuid())
+  programacionSemanalId String
+  usuarioId             String?
+  nombre                String
+  grupo                 String
+  esContratista         Boolean  @default(false)
+  asistencia            Json     @default("[]") // [{dia, estado}]
+  programacion          ProgramacionSemanal @relation(fields: [programacionSemanalId], references: [id], onDelete: Cascade)
+
+  @@index([programacionSemanalId])
+}
+
+model ResumenDia {
+  id                    String              @id @default(cuid())
+  programacionSemanalId String
+  dia                   String
+  fecha                 DateTime
+  hhDisponibles         Float    @default(0)
+  hhProgramadas         Float    @default(0)
+  utilizacion           Float    @default(0)
+  programacion          ProgramacionSemanal @relation(fields: [programacionSemanalId], references: [id], onDelete: Cascade)
+
+  @@index([programacionSemanalId])
+}
+
+// ─── REPORTE DE TURNO ─────────────────────────────────────────────────────────
+
+model ReporteTurno {
+  id                          String   @id @default(cuid())
+  turno                       String
+  fecha                       DateTime
+  supervisorId                String
+  supervisorNombre            String
+  otIds                       String[]
+  otsCriticas                 String[]
+  otsPendientesSiguienteTurno String[]
+  notasOTs                    Json     @default("[]")
+  otsPlanData                 Json     @default("[]")
+  resumenEjecutivo            Json     @default("{}")
+  recomendaciones             Json     @default("[]")
+  estado                      String   @default("borrador")
+  pdfUrl                      String?
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+
+  @@index([turno, fecha(sort: Desc)])
+  @@index([supervisorId, fecha(sort: Desc)])
+}
+
+// ─── CALIBRACIÓN ──────────────────────────────────────────────────────────────
+
+model RegistroCalibracion {
+  id                    String   @id @default(cuid())
+  numeroCertificado     String   @unique
+  tag                   String
+  descripcionInstrumento String
+  tipoVariable          String
+  patronIds             String[]
+  patronCodigos         String[]
+  tecnicoId             String
+  tecnicoNombre         String
+  supervisorId          String?
+  supervisorNombre      String?
+  fecha                 DateTime
+  temperatura           Float?
+  humedad               Float?
+  turno                 String?
+  unidad                String?
+  puntos                Json     // [{lecturaPatron, lecturaInstrumento, error, ...}]
+  puntosAntes           Json     @default("[]")
+  resultadoGeneral      String   // APROBADO|RECHAZADO|AJUSTADO
+  observaciones         String?
+  pdfUrl                String?
+  stickerImpreso        Boolean  @default(false)
+  otAsociada            String?
+  areaCodigo            String   @default("3320")
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  area                  Area     @relation(fields: [areaCodigo], references: [codigo])
+
+  @@index([tag, fecha(sort: Desc)])
+  @@index([areaCodigo, fecha(sort: Desc)])
+}
+
+// ─── ÁRBOL DE FALLAS ──────────────────────────────────────────────────────────
+
+model ArbolFallas {
+  id                 String   @id @default(cuid())
+  tipoEquipo         String?
+  sintoma            String
+  codigoModo         String?
+  causaProbable      String
+  codigoCausa        String?
+  resolucionSugerida String   @default("")
+  tiempoEstimadoHrs  Float    @default(0)
+  activo             Boolean  @default(true)
+  creadoPor          String   @default("sistema")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([tipoEquipo, codigoModo, codigoCausa])
+  @@index([tipoEquipo, sintoma, activo])
+}
+
+model CatalogoModo {
+  id          String @id @default(cuid())
+  codigo      String @unique
+  nombre      String @default("")
+  nombreEs    String @default("")
+  descripcion String @default("")
+}
+
+model CatalogoCausa {
+  id          String @id @default(cuid())
+  codigo      String @unique
+  nombre      String
+  descripcion String @default("")
+}
+
+// ─── CONTADOR (reemplaza el autoincrement de MongoDB) ─────────────────────────
+
+model Contador {
+  nombre String @id
+  valor  Int    @default(0)
+}
