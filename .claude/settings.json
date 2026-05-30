@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s \"http://localhost:3000/api/usuarios?rol=4&area=3320\")",
+      "Bash(python -c \"import json,sys; users=json.load\\(sys.stdin\\); [print\\(u['nombreCompleto'], '|', u['jde'], '|', u['puesto']\\) for u in users]\")",
+      "Bash(curl -s -X DELETE \"http://localhost:3000/api/usuarios/6a01bca00b9986a918355641\")",
+      "Bash(python -c \"import json,sys; users=json.load\\(sys.stdin\\); [print\\(u['_id'], u['nombreCompleto']\\) for u in users if 'Huayllas' in u['nombreCompleto']]\")",
+      "Bash(node -e ' *)",
+      "Bash(python scripts/analizar_fallas.py)",
+      "Bash(set PYTHONIOENCODING=utf-8)",
+      "Bash(npx tsc *)",
+      "Bash(python -c ' *)"
+    ]
+  }
+}

@@ -1,0 +1,777 @@
+[
+  {
+    "codigo": "PCA001",
+    "nombre": "Falta ajuste de protecciones",
+    "descripcion": "Defectos en conductores o falsos contactos en protecciones (guardamotores, fusibles, breakers, disyuntores, pararrayos, etc.)."
+  },
+  {
+    "codigo": "PCA003",
+    "nombre": "Cortocircuito en bobinas",
+    "descripcion": "Cortocircuito en bobinas de estator, bobinas de transformadores, en rotor bobinado, bobinas de solenoides o sensores de proceso."
+  },
+  {
+    "codigo": "PCA004",
+    "nombre": "Conectores sueltos",
+    "descripcion": "Falsos contactos o conectores sueltos o conectores o cables sulfatados."
+  },
+  {
+    "codigo": "PCA005",
+    "nombre": "Cavitación",
+    "descripcion": "Formación de burbujas en un líquido, causada por variaciones que este experimenta en su presión."
+  },
+  {
+    "codigo": "PCA006",
+    "nombre": "Evento externo",
+    "descripcion": "Evento externo al proceso, golpes, cortes de energía, interferencia de otros trabajos, trabajos de izaje,"
+  },
+  {
+    "codigo": "PCA007",
+    "nombre": "Daño por dilatación térmica",
+    "descripcion": "Daño o deterioro por expansión y contracción de tuberias"
+  },
+  {
+    "codigo": "PCA008",
+    "nombre": "Fractura o fisura de componente",
+    "descripcion": "Perdida de continuidad en una pieza o plancha debida a algún esfuerzo sea de flexión, torsión o corte durante su normal operación."
+  },
+  {
+    "codigo": "PCA009",
+    "nombre": "Bajo aislamiento",
+    "descripcion": "Disminución de valores de aislación en bobinas o devanados de motores, transformadores o cables de circuito de potencia, falta de aterramientos de equipos."
+  },
+  {
+    "codigo": "PCA010",
+    "nombre": "Desalineación",
+    "descripcion": "Desalineación de ejes o desalineación de poleas o desalineación de bridas o desalineamiento de cintas transportadoras."
+  },
+  {
+    "codigo": "PCA011",
+    "nombre": "Desgaste de impulsor",
+    "descripcion": "Desgaste o disminución de espesor en impulsor o rodetes (aspas / álabes)."
+  },
+  {
+    "codigo": "PCA012",
+    "nombre": "Desgaste de carcasa",
+    "descripcion": "Desgaste o disminución de espesor en carcasa de la bomba."
+  },
+  {
+    "codigo": "PCA013",
+    "nombre": "Desgaste de plato",
+    "descripcion": "Desgaste o disminución de espesor en plato."
+  },
+  {
+    "codigo": "PCA014",
+    "nombre": "Desgaste de acoplamiento",
+    "descripcion": "Desgaste o deterioro de la pieza por fricción o trabajo con altos esfuerzos."
+  },
+  {
+    "codigo": "PCA016",
+    "nombre": "Disminución de espesor por corrosión externa",
+    "descripcion": "Deterioro de un material o disminución de espesor a consecuencia de un ataque electroquímico por su entorno operacional por corrosión externa."
+  },
+  {
+    "codigo": "PCA017",
+    "nombre": "Disminución de espesor por corrosión interna",
+    "descripcion": "Deterioro de un material o disminución de espesor a consecuencia de un ataque electroquímico por su entorno operacional por corrosión interna."
+  },
+  {
+    "codigo": "PCA018",
+    "nombre": "Disminución de espesor por desgaste",
+    "descripcion": "Desgaste de piezas por fricción o disminución de espesor como: tuberías, liners, planchas bimetálicas, chutes, celdas, corazas, recubrimientos internos."
+  },
+  {
+    "codigo": "PCA019",
+    "nombre": "Eje flectado",
+    "descripcion": "Ejes doblados o vástagos de cilindros flectados o tuberías flectadas o vástagos de válvulas dobladas o ejes de motores flectados."
+  },
+  {
+    "codigo": "PCA020",
+    "nombre": "Elementos de protección dañados",
+    "descripcion": "Daño presente en elementos de protección como ser guardamotores, breakers, fusibles, etc."
+  },
+  {
+    "codigo": "PCA021",
+    "nombre": "Cortocircuito fase a tierra",
+    "descripcion": "Cortocircuito fase a tierra en motores, bobinas, sensores, etc."
+  },
+  {
+    "codigo": "PCA022",
+    "nombre": "Soltura estructural",
+    "descripcion": "Pernos de anclaje sueltos o pernos de sujeción sueltos o pernos de retención sueltos o bridas sueltas o fundaciones / placas base sueltas o revestimiento suelto."
+  },
+  {
+    "codigo": "PCA023",
+    "nombre": "Desbalance",
+    "descripcion": "Desbalance de ventiladores o desbalance de impelers o desbalance de agitadores o de poleas o desbalance de cargas eléctricas o desbalance electromagnético."
+  },
+  {
+    "codigo": "PCA025",
+    "nombre": "Obstrucción por material extraño",
+    "descripcion": "Presencia de materiales extraños al proceso que generan obstrucción de bombas, tuberías, codos, chutes, etc. Por ejemplo herramientas o insumos del proceso."
+  },
+  {
+    "codigo": "PCA026",
+    "nombre": "Perforación por corrosión externa",
+    "descripcion": "Perforación debida a corrosión en tuberias, tanques, chutes, etc."
+  },
+  {
+    "codigo": "PCA027",
+    "nombre": "Perforación por cororsión interna",
+    "descripcion": "Perforación debida a corrosión en tuberias, tanques, chutes, etc."
+  },
+  {
+    "codigo": "PCA028",
+    "nombre": "Perforación por desgaste",
+    "descripcion": "Perforación debida al desgaste en tuberias, tanques, chutes, etc."
+  },
+  {
+    "codigo": "PCA029",
+    "nombre": "Ranuras de refrigeración obstruidas",
+    "descripcion": "Ranuras de refrigeración del motor tapadas o sedimentadas."
+  },
+  {
+    "codigo": "PCA030",
+    "nombre": "Resonancia",
+    "descripcion": "Alta vibración del equipo, funcionamiento de equipo a una frecuencia cercana o muy próxima a las frecuencias naturales de sus componentes o de la estructura."
+  },
+  {
+    "codigo": "PCA031",
+    "nombre": "Lubricante degradado",
+    "descripcion": "Degradación del lubricante por oxidación, perdida de aditivos o incremento de la acidez en el lubricante o disminución de su alcalinidad."
+  },
+  {
+    "codigo": "PCA032",
+    "nombre": "Defecto en rodamiento",
+    "descripcion": "Falla en pista interna o falla en pista externa o falla en jaula de rodamiento o falla en elementos rodantes."
+  },
+  {
+    "codigo": "PCA033",
+    "nombre": "Defectos en el rotor",
+    "descripcion": "Barras rotas o fisuradas en rotor o falta de concentricidad entre rotor y estator."
+  },
+  {
+    "codigo": "PCA037",
+    "nombre": "Desgaste sello mec. / Pita grafitada",
+    "descripcion": "Desgaste sello mecánico, pita grafitada en bombas, etc. o daños en sellos de sistemas de lubricación o sist. hidráulicos."
+  },
+  {
+    "codigo": "PCA038",
+    "nombre": "Sobrecorriente",
+    "descripcion": "Incrementos de corriente que dañan componentes de los sensores o controladores de válvulas, etc."
+  },
+  {
+    "codigo": "PCA041",
+    "nombre": "Sulfatación de conectores",
+    "descripcion": "Conectores o cables sulfatados en Motores, sensores, válvulas, etc."
+  },
+  {
+    "codigo": "PCA043",
+    "nombre": "Tubería de descarga sedimentada",
+    "descripcion": "Tubería de descarga taponeada o sedimentada."
+  },
+  {
+    "codigo": "PCA044",
+    "nombre": "Válvula parcialmente cerrada",
+    "descripcion": "Válvula atascada o no obedece, no abre, no cierra, válvula indefinida."
+  },
+  {
+    "codigo": "PCA045",
+    "nombre": "Ventilador deteriodado",
+    "descripcion": "Faltan aspas de ventilador, ventilador roto o fisurado."
+  },
+  {
+    "codigo": "PCA046",
+    "nombre": "Lubricante incorrecto",
+    "descripcion": "Lubricante de diferente viscosidad al recomendado o de diferente aplicación al requerido."
+  },
+  {
+    "codigo": "PCA050",
+    "nombre": "Falta de lubricante (Aceite / Grasa)",
+    "descripcion": "Bajo nivel de lubricante en cajas de engranajes o sistemas de lubricación o falta de grasa en rodamientos o alojamientos."
+  },
+  {
+    "codigo": "PCA051",
+    "nombre": "Deterioro de prensaestopas",
+    "descripcion": "Deterioro en la prensaestopas o la sujeción de las mismas o mal montaje del prensaestopas."
+  },
+  {
+    "codigo": "PCA052",
+    "nombre": "Sentido de giro incorrecto",
+    "descripcion": "El sentido de giro invertido en bombas puede ocasionar daños principalmente en las máquinas conducidas o los elementos que se encuentras aguas arriba."
+  },
+  {
+    "codigo": "PCA054",
+    "nombre": "Desgaste retén / empaquetadura",
+    "descripcion": "Desgaste en reténes y/o empaquetaduras en cajas de engranajes, porta rodamientos, motores, sistemas de lubricación o sist. hidráulicos."
+  },
+  {
+    "codigo": "PCA056",
+    "nombre": "Fuga de aire comprimido en sistema neumático",
+    "descripcion": "Defectos en regulador de presión, defectos en lubricador, falta de lubricante a lubricador o fugas de aire comprimido."
+  },
+  {
+    "codigo": "PCA058",
+    "nombre": "Sobrepresión",
+    "descripcion": "incremento de la presión en la succión o descarga de la bomba o válvulas, etc."
+  },
+  {
+    "codigo": "PCA059",
+    "nombre": "Desgaste de asiento sellos",
+    "descripcion": "daños o defectos en asientos o desgaste en asientos de válvulas."
+  },
+  {
+    "codigo": "PCA066",
+    "nombre": "Válvula atascada",
+    "descripcion": "Atascamiento de válvula o válvula trabada durante su operación normal."
+  },
+  {
+    "codigo": "PCA067",
+    "nombre": "Bajo flujo agua de sello",
+    "descripcion": "Disminución del flujo en bombas de agua de sello que puede causar problemas durante su normal operación."
+  },
+  {
+    "codigo": "PCA068",
+    "nombre": "Desgaste de vástago / Vástago flectado",
+    "descripcion": "Daños en vástago o ralladuras o desgaste de vástago o deformación de vástago o flexión de vástago (en Válvulas y/o cilindros)."
+  },
+  {
+    "codigo": "PCA071",
+    "nombre": "Deterioro de válvula solenoide",
+    "descripcion": "Daños producidos en la válvula solenoide."
+  },
+  {
+    "codigo": "PCA076",
+    "nombre": "Desgaste freno",
+    "descripcion": "Desgaste de disco de freno o cristalización del mismo."
+  },
+  {
+    "codigo": "PCA077",
+    "nombre": "Defectos en botonera",
+    "descripcion": "Contactos deficientes de botonera o soldadura de contactos o desgaste de contactos o defectos en baterías."
+  },
+  {
+    "codigo": "PCA079",
+    "nombre": "Deterioro de gancho",
+    "descripcion": "Deterioro del gancho, fisura o daño el mismo o su sujeción."
+  },
+  {
+    "codigo": "PCA080",
+    "nombre": "Desgaste de rieles",
+    "descripcion": "Desgaste en rieles o deterioro de estructura portante de balanzas o cabrestante de puentes grúa."
+  },
+  {
+    "codigo": "PCA081",
+    "nombre": "Desgaste de ruedas motrices",
+    "descripcion": "Desgaste anormal en ruedas motrices del carro del puente grua."
+  },
+  {
+    "codigo": "PCA082",
+    "nombre": "Defectos en soldadura",
+    "descripcion": "Defectos en soldadura, grietas en la soldadura o fisuras en cordón de soldadura."
+  },
+  {
+    "codigo": "PCA089",
+    "nombre": "Desalineamiento de ruedas motrices",
+    "descripcion": "Desalineamiento entre las ruedas motrices del carro del puente grua."
+  },
+  {
+    "codigo": "PCA093",
+    "nombre": "Deterioro de Cables / cadenas",
+    "descripcion": "Rotura de hebras en cables deterioro de cadenas."
+  },
+  {
+    "codigo": "PCA094",
+    "nombre": "Defectos en tambor o carrete de arrollamiento",
+    "descripcion": "Daños producidos en tambor o carrete de arrollamiento de cables del puente grua."
+  },
+  {
+    "codigo": "PCA095",
+    "nombre": "Desgaste de poleas",
+    "descripcion": "Desgaste de canales en poleas, escurrimiento axial o excentricidad radial o desgaste de canales o rotura de pestañas."
+  },
+  {
+    "codigo": "PCA101",
+    "nombre": "Baja presión de agua de sello",
+    "descripcion": "La disminución de la presión de agua de sello puede ocasionar que la presión de la bomba sea superior y genere fuga de la pulpa y desgaste de camisa."
+  },
+  {
+    "codigo": "PCA102",
+    "nombre": "Soltura de rodamiento",
+    "descripcion": "Rodamientos suelto de eje o rodamiento suelto de alojamiento o camisa suelta de rodamiento o acoplamiento suelto de eje o manguito suelto de eje."
+  },
+  {
+    "codigo": "PCA103",
+    "nombre": "Desgaste de engranajes",
+    "descripcion": "Falla de engranajes por piting en dientes, rotura de dientes o perdida de flanco del diente o disminución del área de contacto entre dientes."
+  },
+  {
+    "codigo": "PCA104",
+    "nombre": "Pernos sueltos o fracturados",
+    "descripcion": "Pernos de anclaje sueltos o pernos de sujeción sueltos o pernos de retención sueltos o bridas sueltas."
+  },
+  {
+    "codigo": "PCA105",
+    "nombre": "Tolerancias inadecuadas o Fuera de ajuste",
+    "descripcion": "Falta de tolerancias en acoplamientos (GAP) ajustes en ejes, rodamientos, escurrimientos axiales, excentricidad radial, etc."
+  },
+  {
+    "codigo": "PCA106",
+    "nombre": "Lubricante contaminado",
+    "descripcion": "Contaminación con tierra o contaminación con agua o contaminación con productos químicos o elevados valores de código ISO de limpieza del lubricante."
+  },
+  {
+    "codigo": "PCA107",
+    "nombre": "Herrumbre en el lubricante",
+    "descripcion": "Incremento en los elementos de desgaste (Cu, Fe, Sn, Al, Cr,Pb) producto de la contaminación o deficiencias del lubricante."
+  },
+  {
+    "codigo": "PCA108",
+    "nombre": "Filtro saturado",
+    "descripcion": "Saturación de filtro de lubricante, combustible o respiradero por la elevada contaminación del lubricante."
+  },
+  {
+    "codigo": "PCA109",
+    "nombre": "Exceso de lubricante (Aceite / Grasa)",
+    "descripcion": "sobre nivel de lubricante o exceso en cajas de engranajes o sistemas de lubricación o demasiada grasa en rodamientos o alojamientos."
+  },
+  {
+    "codigo": "PCA110",
+    "nombre": "En seguimiento [PdM]",
+    "descripcion": "Equipo o componente en seguimiento para utilizar principalmente en las tareas de monitoreo de condición del departamento de confiabilidad."
+  },
+  {
+    "codigo": "PCA111",
+    "nombre": "Alta temperatura",
+    "descripcion": "Elevada temperatura de operación por encima de lo recomendado o estipulado en el manual del equipo."
+  },
+  {
+    "codigo": "PCA112",
+    "nombre": "Interferencia eléctrica",
+    "descripcion": "Interferencia eléctrica en control de válvulas o sensores del proceso."
+  },
+  {
+    "codigo": "PCA113",
+    "nombre": "Sobrevoltaje",
+    "descripcion": "Disminución de voltaje o incrementos de voltaje en alimentación de motores eléctricos (bobinas de estator y/o rotor), sensores, control de válvulas, etc."
+  },
+  {
+    "codigo": "PCA114",
+    "nombre": "Defectos en rectificador",
+    "descripcion": "Daño en etapa de rectificación de la señal en el variador de frecuencia."
+  },
+  {
+    "codigo": "PCA115",
+    "nombre": "Defectos en inversor",
+    "descripcion": "Daño en etapa de conversión de la señal en el variador de frecuencia."
+  },
+  {
+    "codigo": "PCA116",
+    "nombre": "Programación lógica / Parametrización",
+    "descripcion": "Defectos relacionados a la programación del variador de frecuencia (Software y Firmware) o sensor."
+  },
+  {
+    "codigo": "PCA117",
+    "nombre": "Defectos en sistema de control",
+    "descripcion": "Defectos presentados en sistema de control de válvulas, sistemas de control del sensores, motores, etc."
+  },
+  {
+    "codigo": "PCA118",
+    "nombre": "Defectos en tarjeta",
+    "descripcion": "Daño o deterioro en tarjeta de válvulas o en tarjeta de sensores o balanzas o puentes grúas."
+  },
+  {
+    "codigo": "PCA119",
+    "nombre": "Deterioro de batería",
+    "descripcion": "Deterioro de bornes de baterías, baterías descargadas, falta de agua destilada o líquido de batería, falta de mantenimiento en baterías."
+  },
+  {
+    "codigo": "PCA120",
+    "nombre": "Defectos en pantalla o display",
+    "descripcion": "Display dañado por contaminación con pulpa, defectos en tarjeta o deterioro por radiación solar."
+  },
+  {
+    "codigo": "PCA121",
+    "nombre": "Desgaste en escobillas / carbones",
+    "descripcion": "Deterioro de escobillas o fisuras o solturas en escobillas o desgaste anormal de carbones."
+  },
+  {
+    "codigo": "PCA122",
+    "nombre": "Degradación de aceite dieléctrico",
+    "descripcion": "Degradación del lubricante por oxidación, perdida de aditivos o incremento de la acidez en el aceite dieléctrico o por contaminación con agua."
+  },
+  {
+    "codigo": "PCA123",
+    "nombre": "Defectos en circuito magnético",
+    "descripcion": "Circuito magnético deteriorado o con fallas o desbalance electromagnético"
+  },
+  {
+    "codigo": "PCA124",
+    "nombre": "Variación relación de transformación",
+    "descripcion": "Variaciones en la relación de transformación de un transformador eléctrico."
+  },
+  {
+    "codigo": "PCA125",
+    "nombre": "Deterioro de Bushing",
+    "descripcion": "Fractura o bushing roto durante normal operación del transformador o durante su mantenimiento."
+  },
+  {
+    "codigo": "PCA126",
+    "nombre": "Deterioro de sistema de refrigeración",
+    "descripcion": "Aspas de ventilador fracturado o roto, tubos de intercambiador de calor taponeado o bloqueado o fallas en sensor de temperatura."
+  },
+  {
+    "codigo": "PCA127",
+    "nombre": "Deterioro de terminales / conectores",
+    "descripcion": "Falsos en conectores o por defectos en componentes de sistema de aislamiento de terminales de media y baja tensión."
+  },
+  {
+    "codigo": "PCA128",
+    "nombre": "Efecto corona",
+    "descripcion": "Debido a la ionización del aire circundante a los conductores eléctricos debido a la colisión de electrones libres o de algún átomo capaz de contener esa energía."
+  },
+  {
+    "codigo": "PCA129",
+    "nombre": "Descargas parciales Tracking",
+    "descripcion": "Es el camino eléctrico superficial, cuando la superficie de aislantes está sometida a un gran estrés eléctrico, o contaminación por polvo o humedad."
+  },
+  {
+    "codigo": "PCA130",
+    "nombre": "Arco eléctrico",
+    "descripcion": "Se forma entre dos electrodos sometidos a una diferencia de potencial y de una atmósfera enrarecida, a baja presión, forma entre ellos una descarga luminosa."
+  },
+  {
+    "codigo": "PCA131",
+    "nombre": "Descalibrado",
+    "descripcion": "Componentes descalibrados o fuera de rango o ajuste."
+  },
+  {
+    "codigo": "PCA132",
+    "nombre": "Defectos en colector de anillos rozantes",
+    "descripcion": "Deformación o excentricidad de anillos rozantes, elevada rugosidad de anillos rozantes."
+  },
+  {
+    "codigo": "PCA133",
+    "nombre": "Defectos en Joystick",
+    "descripcion": "Problemas en mando de control Joystick no obedece."
+  },
+  {
+    "codigo": "PCA134",
+    "nombre": "Correa cortada o dañada",
+    "descripcion": "Desgaste de correas o correas cortadas o correas dañadas."
+  },
+  {
+    "codigo": "PCA135",
+    "nombre": "Sobretensión o soltura en correas",
+    "descripcion": "Excesiva tensión o falta de tensión en correas o cintas."
+  },
+  {
+    "codigo": "PCA136",
+    "nombre": "Desgaste de polines",
+    "descripcion": "Deterioro o desgaste de polines en cintas transportadoras."
+  },
+  {
+    "codigo": "PCA137",
+    "nombre": "Deterioro de empalmes / grampas de cintas",
+    "descripcion": "Deterioro de empalmes o grampas de sujeción de cintas o correas transportadoras."
+  },
+  {
+    "codigo": "PCA138",
+    "nombre": "Defectos de fabricación",
+    "descripcion": "Desperfectos en piezas o componentes dañados de fabrica o anomalías durante su fabricación."
+  },
+  {
+    "codigo": "PCA139",
+    "nombre": "Rozamiento",
+    "descripcion": "Calentamiento anormal por rozamientos con otros elementos de su entorno operacional."
+  },
+  {
+    "codigo": "PCA140",
+    "nombre": "Golpe de ariete",
+    "descripcion": "Se origina cuando se cierra bruscamente una válvula en un extremo de la tubería produciéndose una sobrepresión que daña la tubería, válvulas y bomba."
+  },
+  {
+    "codigo": "PCA141",
+    "nombre": "Fatiga / Vida útil",
+    "descripcion": "Fatiga de piezas por tiempo de vida, termino de vida útil del componente o cumplimiento de cantidad de ciclos de operación recomendados por fabricante."
+  },
+  {
+    "codigo": "PCA142",
+    "nombre": "Desgaste de disco succión",
+    "descripcion": "Desgaste o disminución de espesor en disco de succión."
+  },
+  {
+    "codigo": "PCA143",
+    "nombre": "Desgaste de disco prensa",
+    "descripcion": "Desgaste o disminución de espesor en disco prensa de bomba."
+  },
+  {
+    "codigo": "PCA144",
+    "nombre": "Desgaste en camisa",
+    "descripcion": "Desgaste o disminución de espesor en camisa, tambien se refiere a desgaste de camisas en camara de combustión."
+  },
+  {
+    "codigo": "PCA145",
+    "nombre": "Desgaste de Voluta",
+    "descripcion": "Desgaste o disminución de espesor en voluta."
+  },
+  {
+    "codigo": "PCA146",
+    "nombre": "Tazón desgastado",
+    "descripcion": "Desgaste o disminución de espesor de tazón."
+  },
+  {
+    "codigo": "PCA147",
+    "nombre": "Sucio / Sedimentado",
+    "descripcion": "Pulpa de proceso que ensucia los sensores o sedimenta los mismos, causando corrosión de sus componentes o daño de tarjetas, sedimentado por pebbes."
+  },
+  {
+    "codigo": "PCA148",
+    "nombre": "Tubería de succión sedimentada",
+    "descripcion": "Tubería de succión taponeada o sedimentada."
+  },
+  {
+    "codigo": "PCA149",
+    "nombre": "Falta de concentricidad entre rotor y collarín",
+    "descripcion": "Deficiencias en la concentricidad entre el rotor y el collarín en agitadores."
+  },
+  {
+    "codigo": "PCA150",
+    "nombre": "Desgaste de deflectores verticales",
+    "descripcion": "Deterioro de los deflectores verticales en los agitadores."
+  },
+  {
+    "codigo": "PCA151",
+    "nombre": "Desgaste en revestimiento interno",
+    "descripcion": "Desgaste del revestimiento de tuberías, carcazas, etc."
+  },
+  {
+    "codigo": "PCA152",
+    "nombre": "Desgaste del piso falso",
+    "descripcion": "Desgaste producido en piso falso de celdas de flotación."
+  },
+  {
+    "codigo": "PCA153",
+    "nombre": "Sobrecarga",
+    "descripcion": "Sobrecarga que genera defectos o daños en manómetros, sensores o instrumentos de precisión o cargas elevadas en balanzas o puentes grúas, etc."
+  },
+  {
+    "codigo": "PCA154",
+    "nombre": "Pollerin roto o desgastado",
+    "descripcion": "Pollerin de agitador roto o desgastado."
+  },
+  {
+    "codigo": "PCA155",
+    "nombre": "Disperser roto o desgastado",
+    "descripcion": "Disperser de agitador roto o desgastado."
+  },
+  {
+    "codigo": "PCA156",
+    "nombre": "Desgaste de válvula neumática",
+    "descripcion": "Desgaste de válvula neumática de bomba de doble diafragma."
+  },
+  {
+    "codigo": "PCA157",
+    "nombre": "Desgaste en válvula piloto / posicionador",
+    "descripcion": "Daños producidos en la válvula piloto o el posicionador de sensores."
+  },
+  {
+    "codigo": "PCA158",
+    "nombre": "Desgaste de diafragma",
+    "descripcion": "Diafragma dañado o diafragma pinchado o perforado, desgaste de diafragma de bomba neumática."
+  },
+  {
+    "codigo": "PCA159",
+    "nombre": "Desgaste en bomba de lubricación",
+    "descripcion": "Daños o deficiencias de bomba de lubricación en motores de combustión interna o sistemas de recirculación de lubricación."
+  },
+  {
+    "codigo": "PCA160",
+    "nombre": "Desgaste de embrague",
+    "descripcion": "Desgaste de discos de embrague."
+  },
+  {
+    "codigo": "PCA161",
+    "nombre": "Desgaste en bomba de combustible",
+    "descripcion": "Daños o deficiencias de bomba de combustible en motores de combustión interna."
+  },
+  {
+    "codigo": "PCA162",
+    "nombre": "Lubricante contaminado por combustible",
+    "descripcion": "Contaminación de lubricante por paso de combustible a cárter en motores de combustión interna."
+  },
+  {
+    "codigo": "PCA163",
+    "nombre": "Lubricante contaminado por refrigerante",
+    "descripcion": "Contaminación de lubricante por paso de refrigerante a cárter en motores de combustión interna."
+  },
+  {
+    "codigo": "PCA164",
+    "nombre": "Refrigerante contaminado por lubricante",
+    "descripcion": "Contaminación de refrigerante por paso de lubricante a radiador en motores de combustión interna."
+  },
+  {
+    "codigo": "PCA165",
+    "nombre": "Deterioro de motor de arranque",
+    "descripcion": "Daño en motores de arranque o defectos de sus componentes internos."
+  },
+  {
+    "codigo": "PCA166",
+    "nombre": "Deterioro de alternador",
+    "descripcion": "Daño en alternador o defectos de sus componentes internos."
+  },
+  {
+    "codigo": "PCA167",
+    "nombre": "Defectos en el ECM",
+    "descripcion": "Daño o deterioro de componentes en ECM del motor de combustión interna, generador o compresor o motobomba."
+  },
+  {
+    "codigo": "PCA168",
+    "nombre": "Combustión deficiente",
+    "descripcion": "Defectos en combustión por exceso de combustible en cámara de combustión del MCI."
+  },
+  {
+    "codigo": "PCA169",
+    "nombre": "Desgaste de cojinetes / Bujes",
+    "descripcion": "Desgaste de bujes o cojinetes por falta de lubricación o cargas elevadas."
+  },
+  {
+    "codigo": "PCA170",
+    "nombre": "Fisuras en turbo",
+    "descripcion": "las altas temperaturas provocan dilataciónes que pueden fisurar los turbos."
+  },
+  {
+    "codigo": "PCA171",
+    "nombre": "Fractura de válvulas",
+    "descripcion": "Fractura o fisura en válvulas de cilindros."
+  },
+  {
+    "codigo": "PCA172",
+    "nombre": "Desgaste de anillas",
+    "descripcion": "Desgaste de anillas de lubricación, compresión, etc."
+  },
+  {
+    "codigo": "PCA173",
+    "nombre": "Deterioro de chavetas de seguridad",
+    "descripcion": "Deterioro o rotura de chavetas de seguridad de ganchos o cáncamos."
+  },
+  {
+    "codigo": "PCA174",
+    "nombre": "Defectos en pantógrafo",
+    "descripcion": "Fisuras o grietas en pantógrafo o desgaste."
+  },
+  {
+    "codigo": "PCA175",
+    "nombre": "Cilindro atascado",
+    "descripcion": "Cilindro hidráulico o neumático que no se mueve por estar atascado."
+  },
+  {
+    "codigo": "PCA176",
+    "nombre": "Cilindro dañado o con fugas internas",
+    "descripcion": "Cilindro hidráulico o neumático que se encuentra defectuoso o dañado, con fugas internas (cilindro pinchado)."
+  },
+  {
+    "codigo": "PCA177",
+    "nombre": "Desgaste de válvula reguladora de presión",
+    "descripcion": "Deterioro o desgaste de válvula reguladora de presión."
+  },
+  {
+    "codigo": "PCA178",
+    "nombre": "Desgaste de válvula reguladora de caudal",
+    "descripcion": "Deterioro o desgaste de válvula reguladora de caudal."
+  },
+  {
+    "codigo": "PCA179",
+    "nombre": "Desgaste de válvula de control direccional",
+    "descripcion": "Deterioro o desgaste de válvula de control direccional."
+  },
+  {
+    "codigo": "PCA180",
+    "nombre": "Sistema mal purgado",
+    "descripcion": "Existencia de aire en el interior de cilindros hidráulicos debido a falta de purgado de los mismos."
+  },
+  {
+    "codigo": "PCA181",
+    "nombre": "Falla en regulador de presión de aire",
+    "descripcion": "Desperfectos o falla en regulador de presión de línea de aire comprimido"
+  },
+  {
+    "codigo": "PCA182",
+    "nombre": "Falla de control piloto",
+    "descripcion": "Defectos o falla en sistema de control piloto tanto en válvulas como en sensores."
+  },
+  {
+    "codigo": "PCA183",
+    "nombre": "Falla en actuador de válvula",
+    "descripcion": "Problemas o fallas en actuador de válvulas."
+  },
+  {
+    "codigo": "PCA184",
+    "nombre": "Defectos en válvula de alivio o de seguridad",
+    "descripcion": "Deterioro de componentes o falta de calibración de los mismos en pulmones de aire, fallas ocultas que impiden que actué la válvula de seguridad."
+  },
+  {
+    "codigo": "PCA185",
+    "nombre": "Desgaste en válvula check de descarga",
+    "descripcion": "Desperfectos en válvula check que evitan su correcto accionamiento."
+  },
+  {
+    "codigo": "PCA186",
+    "nombre": "Defectos internos cerca de ojos de elevación",
+    "descripcion": "Defectos en proximidad de ojos de elevación."
+  },
+  {
+    "codigo": "PCA187",
+    "nombre": "Contracción o porosidad cerca de orificio pernos",
+    "descripcion": "Porosidades presentes cerca de orificios para pernos."
+  },
+  {
+    "codigo": "PCA188",
+    "nombre": "Discontinuidad en fundición",
+    "descripcion": "Presencia de discontinuidades o porosidad en pieza fundida."
+  },
+  {
+    "codigo": "PCA189",
+    "nombre": "Inserto de Apex desgastado",
+    "descripcion": "Desgaste anormal del apex, evidenciado con un patrón de descarga del apex anormal."
+  },
+  {
+    "codigo": "PCA190",
+    "nombre": "Resalto negativo en revestimiento",
+    "descripcion": "Mala alineación entre revestimientos adyacentes en el hidrociclon."
+  },
+  {
+    "codigo": "PCA191",
+    "nombre": "Desgaste de carcaza de hidrociclón",
+    "descripcion": "Desgste anormal en carcaza de hidrociclon despues de que el revestimiento se termino de desgastar."
+  },
+  {
+    "codigo": "PCA192",
+    "nombre": "Filtro de aire saturado",
+    "descripcion": "Saturación de filtro de aire en motores de combustión interna y compresores."
+  },
+  {
+    "codigo": "PCA193",
+    "nombre": "Bajo nivel aceite dielectrico",
+    "descripcion": "Bajo nivel de aceite dielectrico en transformadores de potencia."
+  },
+  {
+    "codigo": "PCA194",
+    "nombre": "Bajo nivel de combustible",
+    "descripcion": "Bajo nivel de combustible en tanque de motor de combustión interna."
+  },
+  {
+    "codigo": "PCA195",
+    "nombre": "Bajo nivel de refrigerante",
+    "descripcion": "Bajo nivel de refrigerante en radiador de motor de combustión interna."
+  },
+  {
+    "codigo": "PCA196",
+    "nombre": "Falta de alimentación eléctrica",
+    "descripcion": "Falta de alimentación eléctrica al sensor del proceso."
+  },
+  {
+    "codigo": "PCA199",
+    "nombre": "Trabajos varios [TALLERES]",
+    "descripcion": "Contempla trabajos del área de soldadura referidos a seguridad, escaleras, etc. De igual forma contempla trabajos de traslado materiales antes de paradas."
+  }
+]

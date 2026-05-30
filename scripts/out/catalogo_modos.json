@@ -1,0 +1,158 @@
+[
+  {
+    "codigo": "MSC",
+    "nombre": "CÓDIGO",
+    "nombreEs": "DEFINICIÓN INGLES",
+    "descripcion": "MODOS DE FALLA"
+  },
+  {
+    "codigo": "PLU",
+    "nombre": "Plugged / Choked",
+    "nombreEs": "OBSTRUCCIÓN",
+    "descripcion": "Restricción total o parcial de flujo"
+  },
+  {
+    "codigo": "STD",
+    "nombre": "Structural deficiency",
+    "nombreEs": "DEFICIENCIA ESTRUCTURAL",
+    "descripcion": "Daños materiales (grietas, desgaste, fracturas, corrosión, flexión, distorsión, pandeo) rutura de tanque"
+  },
+  {
+    "codigo": "PDE",
+    "nombre": "Parameter deviation",
+    "nombreEs": "DISMINUCIÓN DE ESPESOR",
+    "descripcion": "Parámetro monitoreado excede los límites (Alarma alto / bajo) desgaste"
+  },
+  {
+    "codigo": "CSF",
+    "nombre": "Control / signal failure",
+    "nombreEs": "FALLA DE CONTROL - SEÑAL",
+    "descripcion": "Monitoreo o regulación inexistente o defectuosa, falla en transmitir o recibir comando o datos, falla en accionamiento de función."
+  },
+  {
+    "codigo": "SET",
+    "nombre": "Failure to set/retrieve",
+    "nombreEs": "FALLA DE AJUSTE",
+    "descripcion": "Falla en operaciones / mantenimiento de ajuste/recuperación"
+  },
+  {
+    "codigo": "ELP",
+    "nombre": "External leakage process medium",
+    "nombreEs": "FUGA EXTERNA",
+    "descripcion": "Escape del proceso al medio ambiente (Aceite, agua, pulpa)"
+  },
+  {
+    "codigo": "AIR",
+    "nombre": "Abnormal instrument reading",
+    "nombreEs": "LECTURA ANORMAL EN INSTRUMENTO",
+    "descripcion": "Falsa alarma, indicación errónea en instrumento"
+  },
+  {
+    "codigo": "FTS",
+    "nombre": "Fail to star on demand",
+    "nombreEs": "NO ARRANCA",
+    "descripcion": "No arranca bajo demanda (Suministro de energía eléctrica perdido o insuficiente)"
+  },
+  {
+    "codigo": "BRD",
+    "nombre": "Breakdown",
+    "nombreEs": "ROTURA",
+    "descripcion": "Daños graves (agarrotamiento, rotura, cizalladura, etc)"
+  },
+  {
+    "codigo": "NOI",
+    "nombre": "Noise",
+    "nombreEs": "RUIDO",
+    "descripcion": "Ruido anormal o extraño"
+  },
+  {
+    "codigo": "OHE",
+    "nombre": "Overheating",
+    "nombreEs": "SOBRECALENTAMIENTO",
+    "descripcion": "Calentamiento de piezas del equipo, daño en materiales"
+  },
+  {
+    "codigo": "FOV",
+    "nombre": "Faulty output voltage",
+    "nombreEs": "VARIACIÓN DE VOLTAGE",
+    "descripcion": "Voltage de salida equivocado/oscilante"
+  },
+  {
+    "codigo": "SER",
+    "nombre": "Minor in service problems",
+    "nombreEs": "SOLTURA",
+    "descripcion": "Items sueltos, desconectados, soltura de elementos, etc."
+  },
+  {
+    "codigo": "VIB",
+    "nombre": "Vibration",
+    "nombreEs": "VIBRACIÓN",
+    "descripcion": "Vibración anormal"
+  },
+  {
+    "codigo": "FTC",
+    "nombre": "Failure to close on demand",
+    "nombreEs": "NO CIERRA",
+    "descripcion": "No cierra bajo demanda"
+  },
+  {
+    "codigo": "FTO",
+    "nombre": "Failure to open on demand",
+    "nombreEs": "NO ABRE",
+    "descripcion": "No abre bajo demanda"
+  },
+  {
+    "codigo": "ELF",
+    "nombre": "External Leakage fuel",
+    "nombreEs": "FUGA DE COMBUSTIBLE",
+    "descripcion": "Fuga externa de suministro de combustible/Diesel."
+  },
+  {
+    "codigo": "FCO",
+    "nombre": "Failure to connect",
+    "nombreEs": "FALLA DE CONEXIÓN",
+    "descripcion": "Falla de conexión conector"
+  },
+  {
+    "codigo": "FLP",
+    "nombre": "Failure in lightning protection system",
+    "nombreEs": "FALLA DE ATERRAMIENTO",
+    "descripcion": "Falla de puesta a tierra, etc."
+  },
+  {
+    "codigo": "FOF",
+    "nombre": "Faulty output frequency",
+    "nombreEs": "VARIACIÓN DE FRECUENCIA",
+    "descripcion": "Frecuencia equivocada/oscilante"
+  },
+  {
+    "codigo": "IHT",
+    "nombre": "Insufficient heat transfer",
+    "nombreEs": "TRANSFERENCIA DE CALOR INSUFICIENTE",
+    "descripcion": "Capacidad reducida o inexistente de transferir calor"
+  },
+  {
+    "codigo": "INL",
+    "nombre": "Internal leakage",
+    "nombreEs": "FUGA INTERNA",
+    "descripcion": "Fuga interna de fluidos de proceso o suministro (agua de sello a rodamientos, a caja de engranajes, cilindros hidráulicos, etc)"
+  },
+  {
+    "codigo": "LCP",
+    "nombre": "Leakage in closed position",
+    "nombreEs": "FUGA EN POSICIÓN CERRADA",
+    "descripcion": "Fuga a través de la válvula en posición cerrada"
+  },
+  {
+    "codigo": "PTF",
+    "nombre": "Power/signal transmission failure",
+    "nombreEs": "FALLA DE TRANSMISIÓN DE POTENCIA",
+    "descripcion": "Falla de transmisión de potencia"
+  },
+  {
+    "codigo": "UST",
+    "nombre": "Spurious stop",
+    "nombreEs": "PARADA INESPERADA",
+    "descripcion": "Parada inesperada (objetos extraños, impactos, sistemas vecinos, etc)"
+  }
+]

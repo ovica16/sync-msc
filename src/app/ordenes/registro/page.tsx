@@ -1,0 +1,1629 @@
+"use client";
+
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import AppHeader from "@/components/AppHeader";
+import { useUser } from "@/context/AuthContext";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type TurnoTipo = "Diurno" | "Nocturno" | "Parada de Planta" | "Planta" | "Otro";
+type TipoOT = "CMP" | "CMR" | "PMP" | "PMT" | "PTJ";
+type DiaSem = "Lu" | "Ma" | "Mi" | "Ju" | "Vi" | "Sa" | "Do";
+
+type AreaOption = { codigo: string; nombre: string };
+type EquipoResult = { tag: string; descripcion: string; tipoEquipo: string; descripcionTipo?: string; categoriaISO?: string | null; areaCodigo: string; descripcionArea?: string; nivel?: number; criticidad?: string };
+type ModoEntry  = { codigoModo?: string; sintoma: string };
+type FaultEntry = { codigoCausa?: string; causaProbable: string; resolucionSugerida: string; tiempoEstimadoHrs: number };
+type SentidoInspeccion = "Visual" | "Auditivo" | "Tactil" | "Olfativo" | "Instrumental";
+const SENTIDO_META: Record<SentidoInspeccion, { emoji: string; color: string; label: string }> = {
+  Visual:       { emoji: "👁️",  color: "#2563eb", label: "Visual" },
+  Auditivo:     { emoji: "👂",  color: "#0891b2", label: "Auditivo" },
+  Tactil:       { emoji: "✋",  color: "#d97706", label: "Táctil" },
+  Olfativo:     { emoji: "👃",  color: "#7c3aed", label: "Olfativo" },
+  Instrumental: { emoji: "📏",  color: "#16a34a", label: "Instrumental" },
+};
+type ChecklistItem = { _id: string; nombre: string; disciplina: string; nivelTag: number | null; areaProceso: string; items: { descripcion: string; orden: number; sentido?: SentidoInspeccion }[] };
+type InspeccionEntry = { checklistId: string; checklistNombre: string; items: { descripcion: string; sentido?: SentidoInspeccion; ok: boolean; obs: string }[] };
+
+type LineaForm = {
+  id: string;
+  tag: string; descripcionEquipo: string; tipoEquipo: string; categoriaISO: string; criticidad: string;
+  nivel: number; disciplina: string; areaProceso: string;
+  tipoOT: TipoOT | "";
+  sintoma: string; causaProbable: string; resolucionAplicada: string;
+  tiempoEstimadoHrs: string; tiempoRealHrs: string;
+  descripcionTrabajo: string; tareasEjecutadas: string[];
+  inspeccion: InspeccionEntry | null;
+  observaciones: string;
+};
+
+// Detecta la disciplina usando todas las fuentes disponibles
+const CATS_ELECTRICAS = ["MOTORES", "TABLEROS", "GENERADORES", "TRANSFORMADORES", "VARIADORES DE FREC"];
+// Códigos JDE que son eléctricos — fuente independiente de categoriaISO
+const TIPOS_JDE_ELECTRICOS = new Set(["EMT", "MIL", "AEM", "PGC", "PTF", "TRF", "PSW", "SWT", "PWB"]);
+const RE_DESC_ELECTRICO = /motor|variador|transformador|generador|tablero|vfd|arrancador|switchgear/i;
+
+function detectarDisciplina(tag: string, categoriaISO?: string | null, tipoEquipo?: string, descripcionTipo?: string): string {
+  // TAG con prefijo de letras → Instrumentación (ISA 5.1)
+  if (/^[A-Z]{2,}/.test(tag)) return "Instrumentacion";
+  // Fuente 1: categoriaISO (cuando llega)
+  if (categoriaISO && CATS_ELECTRICAS.includes(categoriaISO)) return "Electrico";
+  // Fuente 2: código JDE directo
+  if (tipoEquipo && TIPOS_JDE_ELECTRICOS.has(tipoEquipo)) return "Electrico";
+  // Fuente 3: descripción del tipo (ej. "Motor Eléctrico", "Transformador de Energía")
+  if (descripcionTipo && RE_DESC_ELECTRICO.test(descripcionTipo)) return "Electrico";
+  return "Mecanico";
+}
+
+// Deriva categoriaISO desde tipoEquipo JDE cuando la BD no la devuelve
+const MAPEO_JDE_CAT: Record<string, string> = {
+  EMT: "MOTORES", MIL: "MOTORES", AEM: "VARIADORES DE FREC",
+  PTF: "TRANSFORMADORES", TRF: "TRANSFORMADORES",
+  PGC: "GENERADORES", PMP: "BOMBAS", VLV: "VALVULAS",
+  CMP: "COMPRESORES", TPM: "CAJAS ENGR", HDS: "SIST HIDRÁULICOS",
+  LBS: "SIST LUBRICACIÓN", SLC: "CINTAS", TNS: "TANQUES",
+  SNT: "SENSORES", HLE: "PUENTES GRUA", HTE: "INTERCAMBIADORES",
+};
+function derivarCategoriaISO(categoriaISO: string | null | undefined, tipoEquipo?: string): string {
+  if (categoriaISO) return categoriaISO;
+  return (tipoEquipo && MAPEO_JDE_CAT[tipoEquipo]) ?? "";
+}
+
+// Normaliza el área de proceso desde descripcionArea
+function detectarAreaProceso(descripcionArea?: string): string {
+  const d = (descripcionArea ?? "").toLowerCase();
+  if (d.includes("chanc")) return "chancado";
+  if (d.includes("moli")) return "molienda";
+  if (d.includes("flot")) return "flotacion";
+  if (d.includes("filtro")) return "filtros";
+  if (d.includes("agua")) return "aguas";
+  return "general";
+}
+
+type BitacoraEntry = { turno: string; supervisor: string; nota: string; hhAtendidas: number; fecha?: string };
+
+type OTPlan = {
+  numeroOT: string; tipoOT: string; tipoTrabajo: string;
+  descripcion: string; tag: string; descripcionEquipo?: string;
+  hhTotal?: number; personas?: number; grupo: string; dia: DiaSem; estado: string;
+  personalAsignado: string[];
+  ordenTrabajoId?: string; ordenTrabajoNum?: string;
+  pasarNoche?: boolean; pasarNocheMotivo?: string; pasarNocheNota?: string; pasarNochePor?: string;
+  esGuardia?: boolean;
+  bitacora?: BitacoraEntry[];
+};
+
+type PlanDoc = {
+  _id: string; semana: number; anio: number; disciplina: string;
+  areaCodigo?: string; otsProgramadas: OTPlan[];
+};
+
+type PlanRef = { planId: string; areaCodigo: string; ot: OTPlan };
+
+type FormData = {
+  fecha: string; turno: TurnoTipo | ""; areaCodigo: string;
+  tecnicos: { usuarioId: string; nombreCompleto: string }[];
+  lineas: LineaForm[];
+  programacionSemanalId: string; otJdeNumero: string; otJdeDia: string; origenPlan: boolean;
+};
+
+// ─── Date/Helpers ─────────────────────────────────────────────────────────────
+
+const DIA_MAP: DiaSem[] = ["Do", "Lu", "Ma", "Mi", "Ju", "Vi", "Sa"];
+
+// Compara nombre del plan vs nombre de sesión tolerando orden de palabras diferente.
+// Ej: "Erwin Huayllas" vs "Huayllas Esquivel Erwin" → match porque comparten tokens.
+function nombreCoincide(planNombre: string, userNombre: string): boolean {
+  const tokens = planNombre.toLowerCase().split(/\s+/).filter(t => t.length > 2);
+  const haystack = userNombre.toLowerCase();
+  return tokens.length > 0 && tokens.some(t => haystack.includes(t));
+}
+
+function getWeekNumber(d: Date) {
+  const dt = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const day = dt.getUTCDay() || 7;
+  dt.setUTCDate(dt.getUTCDate() + 4 - day);
+  const y = new Date(Date.UTC(dt.getUTCFullYear(), 0, 1));
+  return Math.ceil((((dt.getTime() - y.getTime()) / 86400000) + 1) / 7);
+}
+
+// Turnos: Diurno 06:30–18:29 · Nocturno 18:30–06:29 (cruza medianoche)
+// Si son las 00:00–06:29, el turno nocturno pertenece al día ANTERIOR
+function getFechaTurno(): { fecha: string; turno: TurnoTipo } {
+  const ahora = new Date();
+  const min = ahora.getHours() * 60 + ahora.getMinutes();
+  const INICIO_DIA   = 6 * 60 + 30;   // 06:30
+  const INICIO_NOCHE = 18 * 60 + 30;  // 18:30
+  if (min >= INICIO_NOCHE) {
+    return { fecha: ahora.toISOString().split("T")[0], turno: "Nocturno" };
+  } else if (min < INICIO_DIA) {
+    const ayer = new Date(ahora);
+    ayer.setDate(ayer.getDate() - 1);
+    return { fecha: ayer.toISOString().split("T")[0], turno: "Nocturno" };
+  }
+  return { fecha: ahora.toISOString().split("T")[0], turno: "Diurno" };
+}
+
+function autoTurno(): TurnoTipo { return getFechaTurno().turno; }
+
+const TIPOS_OT: { value: TipoOT; label: string; desc: string; color: string }[] = [
+  { value: "CMP", label: "CMP", desc: "Correctivo Mayor Programado", color: "#dc2626" },
+  { value: "CMR", label: "CMR", desc: "Correctivo Menor Rutinario", color: "#d97706" },
+  { value: "PMP", label: "PMP", desc: "Preventivo Mayor Programado", color: "#2563eb" },
+  { value: "PMT", label: "PMT", desc: "Preventivo Menor de Turno", color: "#0891b2" },
+  { value: "PTJ", label: "PTJ", desc: "Proyecto / Trab. de Ingeniería", color: "#7c3aed" },
+];
+
+const TURNOS: TurnoTipo[] = ["Diurno", "Nocturno", "Parada de Planta", "Planta", "Otro"];
+const isCorrectivo = (t: TipoOT | "") => t === "CMP" || t === "CMR";
+const isPreventivo = (t: TipoOT | "") => t === "PMP" || t === "PMT" || t === "PTJ";
+
+const TIPO_COLOR: Record<TipoOT, string> = { CMP: "#dc2626", CMR: "#d97706", PMP: "#2563eb", PMT: "#0891b2", PTJ: "#7c3aed" };
+const CRIT_COLOR: Record<string, string> = { A: "#dc2626", B: "#d97706", C: "#16a34a" };
+const ESTADO_BG: Record<string, string> = {
+  no_iniciada: "#f1f5f9", en_proceso: "#eff6ff", en_revision: "#fffbeb",
+  completada: "#f0fdf4", cancelada: "#fef2f2", atrasada: "#fef2f2", bloqueada: "#faf5ff",
+};
+const ESTADO_CLR: Record<string, string> = {
+  no_iniciada: "#64748b", en_proceso: "#2563eb", en_revision: "#d97706",
+  completada: "#16a34a", cancelada: "#dc2626", atrasada: "#dc2626", bloqueada: "#7c3aed",
+};
+
+function newLinea(): LineaForm {
+  return {
+    id: Math.random().toString(36).slice(2),
+    tag: "", descripcionEquipo: "", tipoEquipo: "", categoriaISO: "", criticidad: "",
+    nivel: 0, disciplina: "", areaProceso: "", tipoOT: "",
+    sintoma: "", causaProbable: "", resolucionAplicada: "", tiempoEstimadoHrs: "", tiempoRealHrs: "",
+    descripcionTrabajo: "", tareasEjecutadas: [], inspeccion: null, observaciones: "",
+  };
+}
+
+function lineaFromPlan(ot: OTPlan): LineaForm {
+  const tipoOT = (["CMP","CMR","PMP","PMT","PTJ"].includes(ot.tipoOT) ? ot.tipoOT : "") as TipoOT | "";
+  return {
+    ...newLinea(),
+    tag: ot.tag,
+    descripcionEquipo: ot.descripcionEquipo ?? "",
+    tipoOT,
+    // Pre-cargar siempre la descripción del plan como detalle de trabajo
+    descripcionTrabajo: ot.descripcion ?? "",
+    tiempoEstimadoHrs: ot.hhTotal ? String(ot.hhTotal) : "",
+  };
+}
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
+const S = {
+  page: { minHeight: "100vh", background: "#f1f5f9" },
+  wrap: { maxWidth: 700, margin: "0 auto", padding: "20px 16px 60px" },
+  card: { background: "white", borderRadius: 12, border: "1px solid #e2e8f0", padding: "18px 16px", marginBottom: 12 },
+  label: { display: "block" as const, fontSize: 11, fontWeight: 700, color: "#64748b", letterSpacing: "0.07em", textTransform: "uppercase" as const, marginBottom: 5 },
+  input: { width: "100%", border: "1px solid #cbd5e1", borderRadius: 8, padding: "9px 11px", fontSize: 14, color: "#1e293b", outline: "none", boxSizing: "border-box" as const, background: "white" },
+  select: { width: "100%", border: "1px solid #cbd5e1", borderRadius: 8, padding: "9px 11px", fontSize: 14, color: "#1e293b", outline: "none", boxSizing: "border-box" as const, background: "white", cursor: "pointer" },
+  textarea: { width: "100%", border: "1px solid #cbd5e1", borderRadius: 8, padding: "9px 11px", fontSize: 14, color: "#1e293b", outline: "none", boxSizing: "border-box" as const, resize: "vertical" as const, minHeight: 68, background: "white" },
+  btnPrimary: (disabled = false) => ({ background: disabled ? "#93c5fd" : "#2563eb", color: "white", border: "none", borderRadius: 8, padding: "11px 20px", fontSize: 14, fontWeight: 700, cursor: disabled ? "not-allowed" as const : "pointer" as const }),
+  btnGreen: (disabled = false) => ({ background: disabled ? "#86efac" : "#16a34a", color: "white", border: "none", borderRadius: 8, padding: "11px 20px", fontSize: 14, fontWeight: 700, cursor: disabled ? "not-allowed" as const : "pointer" as const }),
+  btnOutline: { background: "white", color: "#2563eb", border: "1px solid #2563eb", borderRadius: 8, padding: "11px 20px", fontSize: 14, fontWeight: 600, cursor: "pointer" as const },
+  btnGhost: { background: "transparent", color: "#64748b", border: "1px solid #e2e8f0", borderRadius: 8, padding: "9px 16px", fontSize: 13, cursor: "pointer" as const },
+  badge: (color: string) => ({ display: "inline-block" as const, background: color + "18", color, border: `1px solid ${color}35`, borderRadius: 4, padding: "2px 6px", fontSize: 11, fontWeight: 700, letterSpacing: "0.05em" }),
+  err: { color: "#dc2626", fontSize: 12, marginTop: 4 } as React.CSSProperties,
+};
+
+// ─── TAG Search ───────────────────────────────────────────────────────────────
+
+function TagSearch({ value, area, onSelect }: { value: string; area: string; onSelect: (eq: EquipoResult) => void }) {
+  const [q, setQ] = useState(value);
+  const [results, setResults] = useState<EquipoResult[]>([]);
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => { setQ(value); }, [value]);
+
+  function search(query: string) {
+    setLoading(true);
+    const p = new URLSearchParams();
+    if (query.length >= 2) p.set("q", query);
+    if (area) p.set("area", area);
+    fetch(`/api/equipos?${p}`)
+      .then(r => r.json())
+      .then((d: EquipoResult[]) => {
+        if (d.length === 0 && area) {
+          // fallback: buscar sin filtro de área
+          const p2 = new URLSearchParams();
+          if (query.length >= 2) p2.set("q", query);
+          return fetch(`/api/equipos?${p2}`).then(r => r.json());
+        }
+        return d;
+      })
+      .then((d: EquipoResult[]) => { setResults(d); setOpen(d.length > 0); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }
+
+  return (
+    <div style={{ position: "relative" }}>
+      <div style={{ position: "relative" }}>
+        <input value={q} onChange={e => { setQ(e.target.value); if (timer.current) clearTimeout(timer.current); timer.current = setTimeout(() => search(e.target.value), 280); }}
+          onFocus={() => results.length > 0 ? setOpen(true) : search(q)}
+          onBlur={() => setTimeout(() => setOpen(false), 200)}
+          placeholder="Buscar por TAG o descripción…" style={S.input} />
+        {loading && <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", fontSize: 11, color: "#94a3b8" }}>…</span>}
+      </div>
+      {open && results.length > 0 && (
+        <div style={{ position: "absolute", top: "calc(100% + 3px)", left: 0, right: 0, background: "white", border: "1px solid #e2e8f0", borderRadius: 8, boxShadow: "0 8px 24px rgba(0,0,0,.1)", zIndex: 100, overflow: "hidden" }}>
+          {results.map(eq => (
+            <button key={eq.tag} type="button" onMouseDown={() => { setQ(eq.tag); setOpen(false); onSelect(eq); }}
+              style={{ width: "100%", padding: "9px 13px", background: "none", border: "none", borderBottom: "1px solid #f8fafc", textAlign: "left", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 13, color: "#1e293b" }}>{eq.tag}</div>
+                <div style={{ fontSize: 12, color: "#64748b" }}>{eq.descripcion}</div>
+              </div>
+              <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                {eq.criticidad && <span style={S.badge(CRIT_COLOR[eq.criticidad] ?? "#64748b")}>{eq.criticidad}</span>}
+                {eq.tipoEquipo && <span style={S.badge("#64748b")}>{eq.tipoEquipo}</span>}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Step indicator ───────────────────────────────────────────────────────────
+
+function Steps({ step }: { step: number }) {
+  return (
+    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "14px 0 22px" }}>
+      {[{ n: 1, l: "Encabezado" }, { n: 2, l: "Trabajo" }, { n: 3, l: "Revisión" }].map((s, i, arr) => (
+        <div key={s.n} style={{ display: "flex", alignItems: "center" }}>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+            <div style={{ width: 32, height: 32, borderRadius: "50%", background: step > s.n ? "#2563eb" : step === s.n ? "#1d4ed8" : "#e2e8f0", color: step >= s.n ? "white" : "#94a3b8", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, boxShadow: step === s.n ? "0 0 0 4px #2563eb25" : "none" }}>
+              {step > s.n ? "✓" : s.n}
+            </div>
+            <span style={{ fontSize: 11, color: step >= s.n ? "#2563eb" : "#94a3b8", fontWeight: 600 }}>{s.l}</span>
+          </div>
+          {i < arr.length - 1 && <div style={{ width: 56, height: 2, background: step > s.n ? "#2563eb" : "#e2e8f0", margin: "0 4px 16px" }} />}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Técnicos Panel ───────────────────────────────────────────────────────────
+
+function TecnicosPanel({
+  areaCodigo, tecnicos, personalAsignadoPlan, onChange, error,
+}: {
+  areaCodigo: string;
+  tecnicos: { usuarioId: string; nombreCompleto: string }[];
+  personalAsignadoPlan: string[];
+  onChange: (t: { usuarioId: string; nombreCompleto: string }[]) => void;
+  error?: string;
+}) {
+  const [usuarios, setUsuarios] = useState<{ _id: string; nombreCompleto: string }[]>([]);
+  const [inputNombre, setInputNombre] = useState("");
+  const [showAgregar, setShowAgregar] = useState(false);
+  const [showLista, setShowLista] = useState(false);
+
+  useEffect(() => {
+    if (!areaCodigo) { setUsuarios([]); return; }
+    fetch(`/api/usuarios?rol=4&area=${areaCodigo}`).then(r => r.json()).then(setUsuarios).catch(() => {});
+  }, [areaCodigo]);
+
+  function toggleUsuario(u: { _id: string; nombreCompleto: string }) {
+    const has = tecnicos.some(t => t.usuarioId === u._id);
+    const next = has ? tecnicos.filter(t => t.usuarioId !== u._id) : [...tecnicos, { usuarioId: u._id, nombreCompleto: u.nombreCompleto }];
+    onChange(next);
+    if (!has) setShowLista(false); // colapsar al seleccionar
+  }
+
+  function addFromPlan(nombre: string) {
+    if (tecnicos.some(t => t.nombreCompleto.toLowerCase() === nombre.toLowerCase())) return;
+    // Si existe en lista de usuarios del área, usar su ID
+    const found = usuarios.find(u => u.nombreCompleto.toLowerCase() === nombre.toLowerCase());
+    onChange([...tecnicos, { usuarioId: found?._id ?? "", nombreCompleto: found?.nombreCompleto ?? nombre }]);
+  }
+
+  function addLibre() {
+    const n = inputNombre.trim();
+    if (!n) return;
+    if (tecnicos.some(t => t.nombreCompleto.toLowerCase() === n.toLowerCase())) { setInputNombre(""); return; }
+    const found = usuarios.find(u => u.nombreCompleto.toLowerCase() === n.toLowerCase());
+    onChange([...tecnicos, { usuarioId: found?._id ?? "", nombreCompleto: found?.nombreCompleto ?? n }]);
+    setInputNombre("");
+    setShowAgregar(false);
+  }
+
+  function remove(idx: number) {
+    onChange(tecnicos.filter((_, i) => i !== idx));
+  }
+
+  return (
+    <div style={{ ...S.card, marginBottom: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+        <div style={{ fontWeight: 700, fontSize: 13, color: "#0f2847" }}>
+          Técnico(s) a cargo
+          {tecnicos.length > 0 && <span style={{ fontWeight: 400, color: "#64748b", marginLeft: 6 }}>({tecnicos.length})</span>}
+        </div>
+        <button type="button" onClick={() => setShowAgregar(v => !v)}
+          style={{ fontSize: 12, color: "#2563eb", background: "none", border: "1px solid #bfdbfe", borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontWeight: 600 }}>
+          + Agregar por nombre
+        </button>
+      </div>
+
+      {/* Chips de técnicos seleccionados */}
+      {tecnicos.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+          {tecnicos.map((t, i) => (
+            <span key={i} style={{ display: "flex", alignItems: "center", gap: 5, background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 20, padding: "4px 10px 4px 12px", fontSize: 13, color: "#1d4ed8", fontWeight: 600 }}>
+              {t.nombreCompleto}
+              <button type="button" onClick={() => remove(i)} style={{ background: "none", border: "none", cursor: "pointer", color: "#64748b", fontSize: 14, lineHeight: 1 }}>✕</button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Chips rápidos del plan */}
+      {personalAsignadoPlan.length > 0 && (
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ fontSize: 11, color: "#64748b", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 5 }}>
+            Asignados en el plan
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+            {personalAsignadoPlan.map((nombre, i) => {
+              const yaEsta = tecnicos.some(t => t.nombreCompleto.toLowerCase() === nombre.toLowerCase());
+              return (
+                <button key={i} type="button" onClick={() => yaEsta ? null : addFromPlan(nombre)}
+                  style={{ padding: "5px 12px", borderRadius: 20, fontSize: 12, cursor: yaEsta ? "default" : "pointer", border: yaEsta ? "1px solid #86efac" : "1px solid #e2e8f0", background: yaEsta ? "#f0fdf4" : "white", color: yaEsta ? "#16a34a" : "#374151", fontWeight: yaEsta ? 700 : 400 }}>
+                  {yaEsta ? "✓ " : "+ "}{nombre}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Selector de usuarios del área */}
+      {usuarios.length > 0 && (
+        <div style={{ marginBottom: showLista ? 8 : 0 }}>
+          <button type="button" onClick={() => setShowLista(v => !v)}
+            style={{ fontSize: 12, color: "#2563eb", background: "none", border: "1px solid #bfdbfe", borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontWeight: 600, marginBottom: showLista ? 8 : 0 }}>
+            {showLista ? "▲ Ocultar técnicos" : `+ Técnicos del área (${usuarios.length})`}
+          </button>
+          {showLista && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              {usuarios.map(u => {
+                const sel = tecnicos.some(t => t.usuarioId === u._id);
+                return (
+                  <label key={u._id} style={{ display: "flex", alignItems: "center", gap: 9, padding: "8px 11px", borderRadius: 8, cursor: "pointer", border: sel ? "1px solid #2563eb" : "1px solid #f1f5f9", background: sel ? "#eff6ff" : "#fafafa" }}>
+                    <input type="checkbox" checked={sel} onChange={() => toggleUsuario(u)} style={{ width: 14, height: 14, accentColor: "#2563eb" }} />
+                    <span style={{ fontSize: 13, fontWeight: sel ? 600 : 400, color: "#1e293b" }}>{u.nombreCompleto}</span>
+                  </label>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Input libre para agregar por nombre (contratistas, etc.) */}
+      {showAgregar && (
+        <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
+          <input value={inputNombre} onChange={e => setInputNombre(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addLibre(); } }}
+            placeholder="Nombre del técnico o contratista…"
+            style={{ ...S.input, flex: 1, fontSize: 13 }} />
+          <button type="button" onClick={addLibre} style={{ ...S.btnPrimary(), padding: "9px 14px", fontSize: 13 }}>Agregar</button>
+          <button type="button" onClick={() => setShowAgregar(false)} style={{ ...S.btnGhost, padding: "9px 12px" }}>✕</button>
+        </div>
+      )}
+
+      {!areaCodigo && tecnicos.length === 0 && (
+        <p style={{ fontSize: 12, color: "#94a3b8", fontStyle: "italic" }}>Selecciona un área en el encabezado para ver técnicos disponibles.</p>
+      )}
+      {error && <p style={{ ...S.err, marginTop: 8 }}>{error}</p>}
+    </div>
+  );
+}
+
+// ─── Linea Editor ─────────────────────────────────────────────────────────────
+
+// Verifica si un TAG/nivel/disciplina califica para inspección
+function aplicaChecklist(nivel: number, disciplina: string, tipoOT: TipoOT | ""): boolean {
+  if (!["PMP", "PMT", "CMP"].includes(tipoOT)) return false;
+  // Si nivel no está cargado (0), mostrar igualmente para no bloquear al técnico
+  if (nivel === 0 || nivel === 5 || nivel === 6) return true;
+  if (disciplina === "Instrumentacion" && nivel === 7) return true;
+  return false;
+}
+
+function LineaEditor({
+  linea, area, isNew, soloCorrectivos, onConfirm, onCancel,
+}: {
+  linea: LineaForm; area: string; isNew: boolean; soloCorrectivos?: boolean;
+  onConfirm: (l: LineaForm) => void;
+  onCancel: () => void;
+}) {
+  const [L, setL] = useState(linea);
+  const [tareaInput, setTareaInput] = useState("");
+  const [obsInput, setObsInput] = useState("");
+  const [showInsp, setShowInsp] = useState(!!linea.inspeccion);
+  const obsItems = L.observaciones ? L.observaciones.split("\n").filter(Boolean) : [];
+  const [modosList, setModosList] = useState<ModoEntry[]>([]);
+  const [causas, setCausas] = useState<FaultEntry[]>([]);
+  const [checklists, setChecklists] = useState<ChecklistItem[]>([]);
+  const [loadingCl, setLoadingCl] = useState(false);
+
+  function patch(p: Partial<LineaForm>) { setL(prev => ({ ...prev, ...p })); }
+
+  // Auto-enriquecer equipo cuando viene del plan (tag presente pero sin categoriaISO/tipoEquipo)
+  useEffect(() => {
+    if (!L.tag || L.tipoEquipo) return; // ya tiene datos del equipo
+    fetch(`/api/equipos?tag=${encodeURIComponent(L.tag)}`)
+      .then(r => r.json())
+      .then((data: EquipoResult[]) => {
+        const eq = data[0];
+        if (!eq) return;
+        const catISO = derivarCategoriaISO(eq.categoriaISO, eq.tipoEquipo);
+        patch({
+          descripcionEquipo: eq.descripcion || L.descripcionEquipo,
+          tipoEquipo: eq.tipoEquipo ?? "",
+          categoriaISO: catISO,
+          criticidad: eq.criticidad ?? "",
+          nivel: eq.nivel ?? 0,
+          disciplina: detectarDisciplina(eq.tag, catISO, eq.tipoEquipo, eq.descripcionTipo),
+          areaProceso: detectarAreaProceso(eq.descripcionArea),
+        });
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [L.tag]);
+
+  // Carga checklists cuando cambia TAG (disciplina/nivel/areaProceso)
+  useEffect(() => {
+    if (!L.disciplina || !aplicaChecklist(L.nivel, L.disciplina, L.tipoOT)) {
+      setChecklists([]); return;
+    }
+    setLoadingCl(true);
+    // Nivel 6 usa las mismas plantillas que nivel 5; nivel 7 solo para Instrumentación
+    const nivelQuery = L.nivel === 6 ? 5 : L.nivel;
+    const p = new URLSearchParams({ disciplina: L.disciplina, nivelTag: String(nivelQuery) });
+    if (L.areaProceso) p.set("areaProceso", L.areaProceso);
+    if (L.categoriaISO) p.set("categoriaISO", L.categoriaISO);
+    fetch(`/api/checklist-mantto?${p}`)
+      .then(r => r.json())
+      .then((data: ChecklistItem[]) => {
+        setChecklists(data);
+        // Auto-seleccionar si hay exactamente uno y aún no hay inspección
+        if (data.length === 1 && !L.inspeccion) {
+          const cl = data[0];
+          const items = cl.items.slice().sort((a, b) => a.orden - b.orden).map(it => ({ descripcion: it.descripcion, sentido: it.sentido, ok: false, obs: "" }));
+          setL(prev => ({ ...prev, inspeccion: { checklistId: cl._id, checklistNombre: `${prev.tag} — Inspección`, items } }));
+          setShowInsp(true);
+        }
+      })
+      .catch(() => setChecklists([]))
+      .finally(() => setLoadingCl(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [L.tag, L.disciplina, L.nivel, L.areaProceso, L.tipoOT]);
+
+  useEffect(() => {
+    if (!isCorrectivo(L.tipoOT)) { setModosList([]); return; }
+    const url = L.categoriaISO
+      ? `/api/arbol-fallas?tipoEquipo=${encodeURIComponent(L.categoriaISO)}`
+      : "/api/arbol-fallas";
+    fetch(url)
+      .then(r => r.json())
+      .then((data: ModoEntry[]) => {
+        // Fallback: si no hay modos para esa categoría, mostrar todos
+        if (data.length === 0 && L.categoriaISO) {
+          return fetch("/api/arbol-fallas").then(r => r.json());
+        }
+        return data;
+      })
+      .then(setModosList)
+      .catch(() => setModosList([]));
+  }, [L.tipoOT, L.categoriaISO]);
+
+  useEffect(() => {
+    if (!L.sintoma || !isCorrectivo(L.tipoOT)) { setCausas([]); return; }
+    const modo = modosList.find(m => m.sintoma === L.sintoma);
+    const params = new URLSearchParams();
+    if (modo?.codigoModo) params.set("codigoModo", modo.codigoModo);
+    else params.set("sintoma", L.sintoma);
+    if (L.categoriaISO) params.set("tipoEquipo", L.categoriaISO);
+    fetch(`/api/arbol-fallas?${params.toString()}`)
+      .then(r => r.json())
+      .then((data: FaultEntry[]) => {
+        // Si el filtro por categoría devuelve vacío, reintentar sin filtro
+        if (data.length === 0 && L.categoriaISO) {
+          params.delete("tipoEquipo");
+          return fetch(`/api/arbol-fallas?${params.toString()}`).then(r => r.json());
+        }
+        return data;
+      })
+      .then(setCausas)
+      .catch(() => setCausas([]));
+  }, [L.sintoma, L.categoriaISO, L.tipoOT, modosList]);
+
+  const canConfirm = !!L.tag && !!L.tipoOT;
+
+  return (
+    <div style={{ ...S.card, border: "2px solid #2563eb", background: "#f8fbff", marginBottom: 14 }}>
+      <div style={{ fontWeight: 700, fontSize: 14, color: "#0f2847", marginBottom: 16 }}>
+        {isNew ? "Agregar equipo intervenido" : "Detalles del trabajo"}
+      </div>
+
+      {/* TAG */}
+      <div style={{ marginBottom: 13 }}>
+        <label style={S.label}>TAG del equipo *</label>
+        <TagSearch value={L.tag} area={area} onSelect={eq => {
+          const catISO = derivarCategoriaISO(eq.categoriaISO, eq.tipoEquipo);
+          patch({
+            tag: eq.tag, descripcionEquipo: eq.descripcion, tipoEquipo: eq.tipoEquipo ?? "",
+            categoriaISO: catISO, criticidad: eq.criticidad ?? "",
+            nivel: eq.nivel ?? 0,
+            disciplina: detectarDisciplina(eq.tag, catISO, eq.tipoEquipo, eq.descripcionTipo),
+            areaProceso: detectarAreaProceso(eq.descripcionArea),
+            inspeccion: null,
+          });
+        }} />
+        {L.tag && <p style={{ fontSize: 11, color: "#64748b", marginTop: 3 }}>
+          {L.descripcionEquipo}
+          {L.tipoEquipo && ` — ${L.tipoEquipo}`}
+          {L.criticidad && ` — Crit. ${L.criticidad}`}
+          {L.categoriaISO
+            ? <span style={{ color: "#16a34a", fontWeight: 600 }}> · ISO: {L.categoriaISO}</span>
+            : <span style={{ color: "#dc2626", fontWeight: 600 }}> · ISO: genérico</span>}
+        </p>}
+      </div>
+
+      {/* Tipo OT */}
+      <div style={{ marginBottom: 13 }}>
+        <label style={S.label}>Tipo de OT *</label>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {(soloCorrectivos ? TIPOS_OT.filter(t => t.value === "CMP" || t.value === "CMR") : TIPOS_OT).map(t => {
+            const active = L.tipoOT === t.value;
+            return (
+              <button key={t.value} type="button" title={t.desc}
+                onClick={() => patch({ tipoOT: t.value, sintoma: "", causaProbable: "", resolucionAplicada: "", tiempoEstimadoHrs: isCorrectivo(t.value) ? L.tiempoEstimadoHrs : "", descripcionTrabajo: L.descripcionTrabajo, tareasEjecutadas: [] })}
+                style={{ padding: "7px 13px", borderRadius: 7, fontSize: 12, cursor: "pointer", border: active ? `2px solid ${t.color}` : "1px solid #e2e8f0", background: active ? t.color + "15" : "white", color: active ? t.color : "#64748b", fontWeight: active ? 800 : 400 }}>
+                {t.label}
+              </button>
+            );
+          })}
+        </div>
+        {L.tipoOT && <p style={{ fontSize: 11, color: "#94a3b8", marginTop: 3 }}>{TIPOS_OT.find(t => t.value === L.tipoOT)?.desc}</p>}
+      </div>
+
+      {/* CMP — Correctivo Mayor Programado (sin árbol de fallas) */}
+      {L.tipoOT === "CMP" && (
+        <>
+          <div style={{ marginBottom: 13 }}>
+            <label style={S.label}>Detalle del trabajo realizado</label>
+            <textarea value={L.descripcionTrabajo} onChange={e => patch({ descripcionTrabajo: e.target.value })}
+              placeholder="Describe el trabajo ejecutado (pre-cargado del plan)" style={S.textarea} />
+          </div>
+          <div style={{ marginBottom: 13 }}>
+            <label style={S.label}>Resolución / resultado final</label>
+            <textarea value={L.resolucionAplicada} onChange={e => patch({ resolucionAplicada: e.target.value })}
+              placeholder="¿Quedó operativo? ¿Pendiente algún trabajo?" style={S.textarea} />
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 13 }}>
+            <div>
+              <label style={S.label}>Tiempo estimado (hrs)</label>
+              <input type="number" min="0" step="0.5" value={L.tiempoEstimadoHrs} onChange={e => patch({ tiempoEstimadoHrs: e.target.value })} style={S.input} />
+            </div>
+            <div>
+              <label style={S.label}>Tiempo real (hrs) *</label>
+              <input type="number" min="0" step="0.5" value={L.tiempoRealHrs} onChange={e => patch({ tiempoRealHrs: e.target.value })} style={S.input} />
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* CMR — Correctivo Menor Rutinario (con árbol de fallas) */}
+      {L.tipoOT === "CMR" && (
+        <>
+          <div style={{ marginBottom: 13 }}>
+            <label style={S.label}>Síntoma observado</label>
+            <select value={L.sintoma} onChange={e => patch({ sintoma: e.target.value, causaProbable: "", resolucionAplicada: "" })} style={S.select}>
+              <option value="">— Seleccionar modo de falla —</option>
+              {modosList.map(m => (
+                <option key={m.codigoModo || m.sintoma} value={m.sintoma}>
+                  {m.codigoModo ? `[${m.codigoModo}] ` : ""}{m.sintoma}
+                </option>
+              ))}
+            </select>
+          </div>
+          {L.sintoma && (
+            <div style={{ marginBottom: 13 }}>
+              <label style={S.label}>Causa probable</label>
+              <select value={L.causaProbable}
+                onChange={e => {
+                  const entry = causas.find(c => c.causaProbable === e.target.value);
+                  patch({ causaProbable: e.target.value, resolucionAplicada: entry?.resolucionSugerida ?? "", tiempoEstimadoHrs: entry?.tiempoEstimadoHrs ? String(entry.tiempoEstimadoHrs) : L.tiempoEstimadoHrs });
+                }}
+                style={S.select}>
+                <option value="">— Seleccionar causa —</option>
+                {causas.map(c => (
+                  <option key={c.codigoCausa || c.causaProbable} value={c.causaProbable}>
+                    {c.codigoCausa ? `[${c.codigoCausa}] ` : ""}{c.causaProbable}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          <div style={{ marginBottom: 13 }}>
+            <label style={S.label}>Resolución aplicada</label>
+            <textarea value={L.resolucionAplicada} onChange={e => patch({ resolucionAplicada: e.target.value })} placeholder="Describe lo que se hizo para resolver la falla" style={S.textarea} />
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 13 }}>
+            <div>
+              <label style={S.label}>Tiempo estimado (hrs)</label>
+              <input type="number" min="0" step="0.5" value={L.tiempoEstimadoHrs} onChange={e => patch({ tiempoEstimadoHrs: e.target.value })} style={S.input} />
+            </div>
+            <div>
+              <label style={S.label}>Tiempo real (hrs) *</label>
+              <input type="number" min="0" step="0.5" value={L.tiempoRealHrs} onChange={e => patch({ tiempoRealHrs: e.target.value })} style={S.input} />
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Preventivo */}
+      {isPreventivo(L.tipoOT) && (
+        <>
+          <div style={{ marginBottom: 13 }}>
+            <label style={S.label}>Descripción del trabajo realizado</label>
+            <textarea value={L.descripcionTrabajo} onChange={e => patch({ descripcionTrabajo: e.target.value })} placeholder="Detalle del trabajo preventivo ejecutado" style={S.textarea} />
+          </div>
+          <div style={{ marginBottom: 13 }}>
+            <label style={S.label}>Tareas ejecutadas</label>
+            {L.tareasEjecutadas.map((t, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
+                <span style={{ flex: 1, fontSize: 13, color: "#1e293b", background: "#f1f5f9", borderRadius: 6, padding: "6px 10px" }}>{t}</span>
+                <button type="button" onClick={() => patch({ tareasEjecutadas: L.tareasEjecutadas.filter((_, j) => j !== i) })}
+                  style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 15 }}>✕</button>
+              </div>
+            ))}
+            <div style={{ display: "flex", gap: 8 }}>
+              <input value={tareaInput} onChange={e => setTareaInput(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); if (tareaInput.trim()) { patch({ tareasEjecutadas: [...L.tareasEjecutadas, tareaInput.trim()] }); setTareaInput(""); } } }}
+                placeholder="Tarea ejecutada — Enter para agregar" style={{ ...S.input, flex: 1 }} />
+              <button type="button" onClick={() => { if (tareaInput.trim()) { patch({ tareasEjecutadas: [...L.tareasEjecutadas, tareaInput.trim()] }); setTareaInput(""); } }}
+                style={{ ...S.btnOutline, padding: "9px 13px", fontSize: 13 }}>+ Agregar</button>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 10, alignItems: "flex-end", marginBottom: 13 }}>
+            <div style={{ flex: "0 0 155px" }}>
+              <label style={S.label}>Tiempo real (hrs)</label>
+              <input type="number" min="0" step="0.5" value={L.tiempoRealHrs} onChange={e => patch({ tiempoRealHrs: e.target.value })} style={S.input} />
+            </div>
+            {aplicaChecklist(L.nivel, L.disciplina, L.tipoOT) && (() => {
+              const DISC_ICON: Record<string, { emoji: string; color: string; bg: string }> = {
+                Mecanico:       { emoji: "⚙️",  color: "#0891b2", bg: "#ecfeff" },
+                Electrico:      { emoji: "⚡",  color: "#d97706", bg: "#fffbeb" },
+                Instrumentacion:{ emoji: "📡",  color: "#7c3aed", bg: "#f5f3ff" },
+              };
+              const disc = DISC_ICON[L.disciplina] ?? { emoji: "🔧", color: "#0891b2", bg: "#ecfeff" };
+              const active = showInsp || !!L.inspeccion;
+              return (
+                <button type="button" onClick={() => setShowInsp(v => !v)}
+                  style={{ padding: "8px 13px", borderRadius: 8, fontSize: 12, cursor: "pointer", border: active ? `2px solid ${disc.color}` : "1px solid #e2e8f0", background: active ? disc.bg : "white", color: active ? disc.color : "#64748b", fontWeight: 600, whiteSpace: "nowrap" as const, display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ fontSize: 16, lineHeight: 1 }}>{disc.emoji}</span>
+                  <span>{loadingCl ? "…" : L.inspeccion ? "✓ Inspección" : "Inspección"}</span>
+                  {L.disciplina && <span style={{ fontSize: 10, opacity: 0.75, fontWeight: 500 }}>{L.disciplina.slice(0, 4).toUpperCase()}</span>}
+                </button>
+              );
+            })()}
+          </div>
+          {showInsp && (
+            <div style={{ border: "1.5px solid #0891b2", borderRadius: 10, padding: "13px 14px", marginBottom: 13, background: "#f0fdff" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                <span style={{ fontWeight: 700, fontSize: 13, color: "#0f2847" }}>Inspección / Checklist</span>
+                <button type="button" onClick={() => { setShowInsp(false); patch({ inspeccion: null }); }} style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: 14 }}>✕</button>
+              </div>
+              {checklists.length === 0 ? (
+                <p style={{ fontSize: 12, color: "#94a3b8", fontStyle: "italic" }}>
+                  {loadingCl ? "Cargando checklist…" : "Sin plantilla de inspección para este equipo. Ejecuta el seed de checklists en Configuración."}
+                </p>
+              ) : !L.inspeccion ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {checklists.map(cl => (
+                    <button key={cl._id} type="button"
+                      onClick={() => {
+                        const items = cl.items.slice().sort((a, b) => a.orden - b.orden).map(it => ({ descripcion: it.descripcion, sentido: it.sentido, ok: false, obs: "" }));
+                        patch({ inspeccion: { checklistId: cl._id, checklistNombre: `${L.tag} — Inspección`, items } });
+                      }}
+                      style={{ textAlign: "left" as const, padding: "9px 12px", borderRadius: 8, cursor: "pointer", border: "1px solid #a5f3fc", background: "white", fontSize: 13, color: "#0f172a" }}>
+                      {cl.nombre} <span style={{ fontSize: 11, color: "#64748b" }}>({cl.items.length} ítems)</span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "#0891b2" }}>{L.inspeccion.checklistNombre}</span>
+                    <button type="button" onClick={() => patch({ inspeccion: null })} style={{ fontSize: 11, color: "#94a3b8", background: "none", border: "none", cursor: "pointer" }}>cambiar</button>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {L.inspeccion.items.map((it, idx) => {
+                      const meta = SENTIDO_META[it.sentido ?? "Visual"];
+                      return (
+                        <div key={idx} style={{ background: "white", borderRadius: 8, border: `1px solid ${it.ok ? "#a7f3d0" : "#e0f7fa"}`, overflow: "hidden" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 11px" }}>
+                            {/* Ícono sentido */}
+                            <span title={meta.label} style={{ fontSize: 18, flexShrink: 0, lineHeight: 1 }}>{meta.emoji}</span>
+                            {/* Checkbox */}
+                            <input type="checkbox" checked={it.ok}
+                              onChange={e => { const upd = [...L.inspeccion!.items]; upd[idx] = { ...upd[idx], ok: e.target.checked }; patch({ inspeccion: { ...L.inspeccion!, items: upd } }); }}
+                              style={{ width: 16, height: 16, accentColor: "#0891b2", cursor: "pointer", flexShrink: 0 }} />
+                            <span style={{ flex: 1, fontSize: 13, color: it.ok ? "#64748b" : "#1e293b", textDecoration: it.ok ? "line-through" : "none" }}>
+                              {it.descripcion}
+                            </span>
+                            {it.ok && <span style={{ fontSize: 11, color: "#16a34a", fontWeight: 700, flexShrink: 0 }}>OK</span>}
+                          </div>
+                          {/* Campo anomalía — solo visible si no está OK, o si tiene texto */}
+                          {(!it.ok || it.obs) && (
+                            <div style={{ borderTop: "1px solid #f1f5f9", padding: "5px 11px 7px" }}>
+                              <input type="text" value={it.obs}
+                                onChange={e => { const upd = [...L.inspeccion!.items]; upd[idx] = { ...upd[idx], obs: e.target.value }; patch({ inspeccion: { ...L.inspeccion!, items: upd } }); }}
+                                placeholder="Anomalía / observación"
+                                style={{ ...S.input, fontSize: 12, padding: "4px 8px", background: it.obs ? "#fef3c7" : "#f8fafc", borderColor: it.obs ? "#fcd34d" : "#e2e8f0" }} />
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </>
+      )}
+
+      {L.tipoOT && (
+        <div style={{ marginBottom: 16 }}>
+          <label style={S.label}>Observaciones generales</label>
+          {obsItems.map((obs, i) => (
+            <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 6 }}>
+              <span style={{ flex: 1, fontSize: 13, color: "#1e293b", background: "#f8fafc", borderRadius: 6, padding: "6px 10px", border: "1px solid #e2e8f0", lineHeight: 1.5 }}>
+                {obs}
+              </span>
+              <button type="button"
+                onClick={() => patch({ observaciones: obsItems.filter((_, j) => j !== i).join("\n") })}
+                style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 15, paddingTop: 4 }}>✕</button>
+            </div>
+          ))}
+          <div style={{ display: "flex", gap: 8 }}>
+            <input value={obsInput} onChange={e => setObsInput(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  if (obsInput.trim()) { patch({ observaciones: [...obsItems, obsInput.trim()].join("\n") }); setObsInput(""); }
+                }
+              }}
+              placeholder="Agregar observación — Enter para confirmar"
+              style={{ ...S.input, fontSize: 13, flex: 1 }} />
+            <button type="button"
+              onClick={() => { if (obsInput.trim()) { patch({ observaciones: [...obsItems, obsInput.trim()].join("\n") }); setObsInput(""); } }}
+              style={{ ...S.btnOutline, padding: "9px 13px", fontSize: 13, whiteSpace: "nowrap" as const }}>+ Agregar</button>
+          </div>
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+        <button type="button" onClick={onCancel} style={S.btnGhost}>Cancelar</button>
+        <button type="button" onClick={() => onConfirm(L)} disabled={!canConfirm} style={S.btnPrimary(!canConfirm)}>Confirmar equipo</button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
+
+export default function RegistroOTPage() {
+  const router = useRouter();
+  const { user, loading: authLoading } = useUser();
+
+  const now = new Date();
+  const { fecha: shiftFecha, turno: shiftTurno } = getFechaTurno();
+  // today = fecha calendario real (para semana/día display)
+  // shiftFecha = fecha del turno activo (puede ser ayer si son las 00:00-06:29)
+  const today = now.toISOString().split("T")[0];
+  const todayDia = DIA_MAP[now.getDay()];
+  const currentSemana = getWeekNumber(now);
+  const currentAnio = now.getFullYear();
+
+  // ── Vista: "inicio" (listado plan) | "registro" (formulario) ──
+  const [view, setView] = useState<"inicio" | "registro">("inicio");
+  const [step, setStep] = useState(1);
+
+  // ── Plan del Día ──
+  const [planRefs, setPlanRefs] = useState<PlanRef[]>([]);
+  const [diaSeleccionado, setDiaSeleccionado] = useState<DiaSem>(todayDia);
+  const [loadingPlan, setLoadingPlan] = useState(false);
+
+  // ── Formulario ──
+  const emptyForm = useCallback((): FormData => ({
+    fecha: shiftFecha, turno: shiftTurno, areaCodigo: "", tecnicos: [],
+    lineas: [], programacionSemanalId: "", otJdeNumero: "", otJdeDia: "", origenPlan: false,
+  }), [shiftFecha, shiftTurno]);
+
+  const [form, setForm] = useState<FormData>(emptyForm);
+  const [areas, setAreas] = useState<AreaOption[]>([]);
+
+  // Inline linea editor
+  const [editLinea, setEditLinea] = useState<LineaForm | null>(null);
+  const [editIdx, setEditIdx] = useState<number | null>(null);
+  const [isNewLinea, setIsNewLinea] = useState(false);
+
+  const [errs, setErrs] = useState<Record<string, string>>({});
+  const [submitting, setSubmitting] = useState(false);
+  const [submitErr, setSubmitErr] = useState("");
+  const [done, setDone] = useState(false);
+  const [doneOT, setDoneOT] = useState<{ numeroOT: string; estado: string } | null>(null);
+
+  // ── Bitácora Guardia ──
+  const [guardiaRef, setGuardiaRef] = useState<PlanRef | null>(null);
+  const [guardiaNota, setGuardiaNota] = useState("");
+  const [guardiaHH, setGuardiaHH] = useState(0);
+  const [savingGuardia, setSavingGuardia] = useState(false);
+
+  const autoTurnoGuardia = () => shiftTurno;
+
+  async function confirmarBitacora() {
+    if (!guardiaRef || !guardiaNota.trim()) return;
+    setSavingGuardia(true);
+    try {
+      await fetch(`/api/programacion-semanal/${guardiaRef.planId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          numeroOT: guardiaRef.ot.numeroOT,
+          dia: guardiaRef.ot.dia,
+          grupo: guardiaRef.ot.grupo, // Diurno o Nocturno — separa los registros
+          bitacoraEntry: {
+            turno: guardiaRef.ot.grupo, // usa el grupo real del plan
+            supervisor: user?.nombre ?? "Supervisor",
+            nota: guardiaNota.trim(),
+            hhAtendidas: guardiaHH,
+          },
+        }),
+      });
+      // Actualizar local
+      setPlanRefs(prev => prev.map(r =>
+        r.planId === guardiaRef.planId && r.ot.numeroOT === guardiaRef.ot.numeroOT
+          ? { ...r, ot: { ...r.ot, esGuardia: true, estado: "en_proceso",
+              bitacora: [...(r.ot.bitacora ?? []), { turno: autoTurnoGuardia(), supervisor: user?.nombre ?? "", nota: guardiaNota.trim(), hhAtendidas: guardiaHH }] } as OTPlan }
+          : r
+      ));
+      setGuardiaRef(null);
+      setGuardiaNota("");
+      setGuardiaHH(0);
+    } finally {
+      setSavingGuardia(false);
+    }
+  }
+
+  // ── Pasar a Noche ──
+  const [pasarNocheRef, setPasarNocheRef] = useState<PlanRef | null>(null);
+  const [pasarNocheMotivo, setPasarNocheMotivo] = useState("Sin tiempo en el turno");
+  const [pasarNocheNota, setPasarNocheNota] = useState("");
+  const [savingNoche, setSavingNoche] = useState(false);
+
+  async function confirmarPasarNoche() {
+    if (!pasarNocheRef) return;
+    setSavingNoche(true);
+    try {
+      await fetch(`/api/programacion-semanal/${pasarNocheRef.planId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          numeroOT: pasarNocheRef.ot.numeroOT,
+          dia: pasarNocheRef.ot.dia,
+          pasarNoche: true,
+          pasarNocheMotivo,
+          pasarNocheNota,
+          pasarNochePor: user?.nombre ?? "Supervisor",
+        }),
+      });
+      // Actualizar el plan local sin recargar
+      setPlanRefs(prev => prev.map(r =>
+        r.planId === pasarNocheRef.planId && r.ot.numeroOT === pasarNocheRef.ot.numeroOT
+          ? { ...r, ot: { ...r.ot, pasarNoche: true } as OTPlan }
+          : r
+      ));
+      setPasarNocheRef(null);
+      setPasarNocheNota("");
+    } finally {
+      setSavingNoche(false);
+    }
+  }
+
+  function patchForm(patch: Partial<FormData>) { setForm(f => ({ ...f, ...patch })); }
+
+  // ── Load areas ──
+  useEffect(() => {
+    fetch("/api/areas").then(r => r.json()).then(setAreas).catch(() => {});
+  }, []);
+
+  // ── Load plan del día ──
+  useEffect(() => {
+    if (authLoading || !user) return;
+    setLoadingPlan(true);
+    const p = new URLSearchParams({ semana: String(currentSemana), anio: String(currentAnio), limit: "50" });
+    fetch(`/api/programacion-semanal?${p}`)
+      .then(r => r.json())
+      .then((planes: PlanDoc[]) => {
+        const refs: PlanRef[] = [];
+        for (const plan of planes) {
+          // Cargar TODAS las OTs de la semana (todos los días)
+          for (const ot of plan.otsProgramadas) {
+            if (user.rol === 4) {
+              if (!ot.personalAsignado.some(p => nombreCoincide(p, user.nombre))) continue;
+            } else if (user.rol >= 3 && user.areas?.length > 0 && plan.areaCodigo) {
+              if (!user.areas.includes(plan.areaCodigo)) continue;
+            }
+            refs.push({ planId: String(plan._id), areaCodigo: plan.areaCodigo ?? "", ot });
+          }
+        }
+        setPlanRefs(refs);
+      })
+      .catch(() => {})
+      .finally(() => setLoadingPlan(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoading, user]);
+
+
+  // ─── Seleccionar OT del plan → abrir registro ──────────────────────────────
+
+  function abrirRegistroPlan(ref: PlanRef) {
+    const linea = lineaFromPlan(ref.ot);
+    // Pre-cargar personal asignado en el plan
+    const tecnicos: FormData["tecnicos"] = ref.ot.personalAsignado.map(nombre => ({
+      usuarioId: "",
+      nombreCompleto: nombre,
+    }));
+    // Agregar usuario logueado si es técnico y no está ya en la lista
+    if (user && user.rol === 4) {
+      const yaEsta = tecnicos.some(t => t.nombreCompleto.toLowerCase() === user.nombre.toLowerCase());
+      if (!yaEsta) tecnicos.push({ usuarioId: user.id, nombreCompleto: user.nombre });
+    }
+    setForm({
+      fecha: shiftFecha,
+      turno: shiftTurno,
+      areaCodigo: ref.areaCodigo,
+      tecnicos,
+      lineas: [linea],
+      programacionSemanalId: ref.planId,
+      otJdeNumero: ref.ot.numeroOT,
+      otJdeDia: ref.ot.dia,
+      origenPlan: true,
+    });
+    // Abrir el editor de la linea pre-cargada
+    setEditLinea({ ...linea });
+    setEditIdx(0);
+    setIsNewLinea(false);
+    setStep(2);
+    setView("registro");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function abrirRegistroReactivo() {
+    setForm(emptyForm());
+    setEditLinea(null);
+    setStep(1);
+    setView("registro");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function volverAlInicio() {
+    setView("inicio");
+    setEditLinea(null);
+    setErrs({});
+    setSubmitErr("");
+  }
+
+  // ─── Linea handlers ────────────────────────────────────────────────────────
+
+  function confirmLinea(l: LineaForm) {
+    if (isNewLinea) {
+      patchForm({ lineas: [...form.lineas, l] });
+    } else if (editIdx !== null) {
+      const next = [...form.lineas];
+      next[editIdx] = l;
+      patchForm({ lineas: next });
+    }
+    setEditLinea(null);
+    setEditIdx(null);
+    setIsNewLinea(false);
+  }
+
+  function cancelLinea() {
+    setEditLinea(null);
+    setEditIdx(null);
+    setIsNewLinea(false);
+  }
+
+  function openEdit(idx: number) {
+    setEditLinea({ ...form.lineas[idx] });
+    setEditIdx(idx);
+    setIsNewLinea(false);
+  }
+
+  function removeLinea(idx: number) {
+    patchForm({ lineas: form.lineas.filter((_, i) => i !== idx) });
+  }
+
+  // ─── Validation ────────────────────────────────────────────────────────────
+
+  function validateStep1() {
+    const e: Record<string, string> = {};
+    if (!form.fecha) e.fecha = "Seleccione la fecha";
+    if (!form.turno) e.turno = "Seleccione el turno";
+    if (!form.areaCodigo) e.areaCodigo = "Seleccione el área";
+    if (form.tecnicos.length === 0) e.tecnicos = "Seleccione al menos un técnico";
+    setErrs(e);
+    return Object.keys(e).length === 0;
+  }
+
+  function validateStep2() {
+    const e: Record<string, string> = {};
+    if (form.lineas.length === 0) e.lineas = "Agregue al menos un equipo intervenido";
+    if (editLinea) e.edit = "Confirme o cancele el equipo en edición";
+    setErrs(e);
+    return Object.keys(e).length === 0;
+  }
+
+  // ─── Submit ────────────────────────────────────────────────────────────────
+
+  async function submit(estado: "borrador" | "pendiente_revision") {
+    setSubmitting(true); setSubmitErr("");
+    try {
+      const payload = {
+        fecha: form.fecha, turno: form.turno, areaCodigo: form.areaCodigo,
+        tecnicos: form.tecnicos, estado,
+        origenPlan: form.origenPlan,
+        ...(form.origenPlan ? { programacionSemanalId: form.programacionSemanalId, otJdeNumero: form.otJdeNumero, otJdeDia: form.otJdeDia } : { ...(form.otJdeNumero ? { otJdeNumero: form.otJdeNumero } : {}) }),
+        lineas: form.lineas.map(l => ({
+          tag: l.tag, descripcionEquipo: l.descripcionEquipo, tipoOT: l.tipoOT, adjuntos: [],
+          ...(isCorrectivo(l.tipoOT) ? {
+            sintoma: l.sintoma || undefined, causaProbable: l.causaProbable || undefined,
+            resolucionAplicada: l.resolucionAplicada || undefined,
+            tiempoEstimadoHrs: l.tiempoEstimadoHrs ? Number(l.tiempoEstimadoHrs) : undefined,
+            tiempoRealHrs: l.tiempoRealHrs ? Number(l.tiempoRealHrs) : undefined,
+          } : {
+            descripcionTrabajo: l.descripcionTrabajo || undefined,
+            tareasEjecutadas: l.tareasEjecutadas.length > 0 ? l.tareasEjecutadas : undefined,
+            tiempoRealHrs: l.tiempoRealHrs ? Number(l.tiempoRealHrs) : undefined,
+          }),
+          observaciones: l.observaciones || undefined,
+        })),
+      };
+      const res = await fetch("/api/ordenes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Error al guardar");
+      setDone(true);
+      setDoneOT({ numeroOT: data.ot.numeroOT, estado: data.ot.estado });
+    } catch (e: unknown) {
+      setSubmitErr(e instanceof Error ? e.message : "Error desconocido");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  // ─── Success ───────────────────────────────────────────────────────────────
+
+  if (done && doneOT) {
+    return (
+      <div style={S.page}>
+        <AppHeader backHref="/ordenes" />
+        <div style={{ ...S.wrap, maxWidth: 460, textAlign: "center", paddingTop: 64 }}>
+          <div style={{ fontSize: 52, marginBottom: 10 }}>{doneOT.estado === "pendiente_revision" ? "📋" : "💾"}</div>
+          <h2 style={{ fontSize: 22, fontWeight: 800, color: "#1e293b", marginBottom: 6 }}>OT Registrada</h2>
+          <div style={{ fontSize: 30, fontWeight: 800, color: "#2563eb", letterSpacing: "0.04em", marginBottom: 8 }}>#{doneOT.numeroOT}</div>
+          {form.origenPlan && form.otJdeNumero && (
+            <div style={{ ...S.badge("#2563eb"), fontSize: 12, marginBottom: 10 }}>Plan · OT {form.otJdeNumero}</div>
+          )}
+          <p style={{ color: "#64748b", fontSize: 14, lineHeight: 1.6, marginBottom: 28 }}>
+            {doneOT.estado === "pendiente_revision" ? "OT enviada al supervisor para revisión." : "OT guardada como borrador."}
+          </p>
+          <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+            <button onClick={() => { setDone(false); setDoneOT(null); setView("inicio"); }} style={S.btnPrimary()}>Volver al plan</button>
+            <button onClick={() => router.push("/ordenes/reporte")} style={S.btnGhost}>Ver tablero</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── Render ────────────────────────────────────────────────────────────────
+
+  return (
+    <div style={S.page}>
+      <AppHeader backHref="/ordenes" />
+      <div style={S.wrap}>
+
+        <h1 style={{ fontSize: 19, fontWeight: 800, color: "#0f2847", marginBottom: 2 }}>Registro de OT</h1>
+        <p style={{ fontSize: 12, color: "#94a3b8", marginBottom: 16 }}>Semana {currentSemana} · {today} ({todayDia})</p>
+
+        {/* ════════════════ VISTA INICIO ════════════════════════════════════ */}
+        {view === "inicio" && (
+          <>
+            {/* Plan Semanal — navegación por días */}
+            <div style={{ ...S.card, border: "1px solid #bfdbfe", background: "#f8fbff", padding: 0, overflow: "hidden" }}>
+              {/* Header */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 16px 10px" }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 15, color: "#1d4ed8" }}>
+                    Plan de la Semana {currentSemana}
+                  </div>
+                  <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>
+                    {user?.rol === 4 ? "Tus OTs programadas" : "OTs programadas de tu área"}
+                  </div>
+                </div>
+                {loadingPlan && <span style={{ fontSize: 12, color: "#94a3b8" }}>Cargando…</span>}
+              </div>
+
+              {/* Pestañas de días */}
+              {!loadingPlan && (
+                <div style={{ display: "flex", borderTop: "1px solid #e0eeff", borderBottom: "1px solid #e0eeff", overflowX: "auto", background: "white" }}>
+                  {(["Lu","Ma","Mi","Ju","Vi","Sa","Do"] as DiaSem[]).map(dia => {
+                    const count = planRefs.filter(r => r.ot.dia === dia).length;
+                    const isHoy = dia === todayDia;
+                    const isActive = dia === diaSeleccionado;
+                    return (
+                      <button key={dia} onClick={() => setDiaSeleccionado(dia)} style={{
+                        flex: 1, minWidth: 48, padding: "8px 6px", border: "none",
+                        borderBottom: isActive ? "3px solid #2563eb" : "3px solid transparent",
+                        background: isActive ? "#eff6ff" : "transparent",
+                        cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
+                      }}>
+                        <span style={{ fontSize: 11, fontWeight: 800, color: isActive ? "#2563eb" : isHoy ? "#0f2847" : "#94a3b8", letterSpacing: "0.04em" }}>
+                          {dia}{isHoy ? " ●" : ""}
+                        </span>
+                        {count > 0
+                          ? <span style={{ fontSize: 11, fontWeight: 700, color: isActive ? "#2563eb" : "#64748b" }}>{count}</span>
+                          : <span style={{ fontSize: 11, color: "#cbd5e1" }}>—</span>
+                        }
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Lista de OTs del día seleccionado */}
+              <div style={{ padding: "10px 12px" }}>
+              {!loadingPlan && planRefs.filter(r => r.ot.dia === diaSeleccionado).length === 0 && (
+                <div style={{ textAlign: "center", padding: "16px 0 8px", color: "#94a3b8", fontSize: 13 }}>
+                  Sin OTs programadas para {diaSeleccionado}
+                  {diaSeleccionado === todayDia && <><br /><span style={{ fontSize: 12 }}>Usa el botón de abajo para registrar una OT reactiva.</span></>}
+                </div>
+              )}
+
+              {planRefs.filter(r => r.ot.dia === diaSeleccionado).map((ref, i) => {
+                const ot = ref.ot;
+                const yaRegistrada = !!ot.ordenTrabajoId;
+                // Auto-detectar guardia: tag contiene OPEPLANT o esGuardia marcado
+                const esGuardia = ot.esGuardia || ot.tag?.includes("OPEPLANT");
+                const tipoColor = TIPO_COLOR[ot.tipoOT as TipoOT] ?? "#64748b";
+                const estadoClr = ESTADO_CLR[ot.estado] ?? "#64748b";
+                const estadoBg = ESTADO_BG[ot.estado] ?? "#f1f5f9";
+                return (
+                  <div key={i} style={{
+                    border: yaRegistrada ? "1px solid #e2e8f0" : "1px solid #bfdbfe",
+                    borderRadius: 10, padding: "12px 14px", marginBottom: 8,
+                    background: yaRegistrada ? "#fafafa" : "white",
+                  }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: "flex", gap: 5, alignItems: "center", flexWrap: "wrap", marginBottom: 4 }}>
+                          <span style={S.badge(tipoColor)}>{ot.tipoOT}</span>
+                          <span style={{ fontWeight: 800, fontSize: 13, color: "#1e293b" }}>{ot.numeroOT}</span>
+                          <span style={{ fontSize: 12, color: "#64748b", fontFamily: "monospace" }}>{ot.tag}</span>
+                        </div>
+                        <p style={{ fontSize: 13, color: "#334155", marginBottom: 5, lineHeight: 1.4 }}>{ot.descripcion}</p>
+                        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+                          {ot.hhTotal ? <span style={{ fontSize: 11, color: "#94a3b8" }}>⏱ {ot.hhTotal}h</span> : null}
+                          {ot.personas ? <span style={{ fontSize: 11, color: "#94a3b8" }}>👥 {ot.personas}</span> : null}
+                          <span style={{ fontSize: 11, color: "#94a3b8" }}>{ot.grupo}</span>
+                          {ot.personalAsignado.length > 0 && (
+                            <span style={{ fontSize: 11, color: "#64748b" }}>{ot.personalAsignado.join(", ")}</span>
+                          )}
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, flexShrink: 0 }}>
+                        {esGuardia ? (
+                          <span style={{ fontSize: 10, fontWeight: 700, background: "#fef3c7", color: "#92400e", border: "1px solid #fde68a", borderRadius: 6, padding: "2px 8px" }}>
+                            🔄 TURNERO
+                          </span>
+                        ) : (
+                          <span style={{ ...S.badge(estadoClr), background: estadoBg }}>{ot.estado.replace(/_/g, " ")}</span>
+                        )}
+                        {esGuardia ? (
+                          yaRegistrada ? (
+                            <button
+                              onClick={() => router.push("/ordenes/reporte")}
+                              style={{ fontSize: 12, color: "#16a34a", background: "none", border: "none", cursor: "pointer", fontWeight: 700 }}>
+                              #{ot.ordenTrabajoNum} Ver →
+                            </button>
+                          ) : (
+                            <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-end" }}>
+                              <button onClick={() => abrirRegistroPlan(ref)}
+                                style={{ ...S.btnPrimary(), padding: "7px 14px", fontSize: 13, background: "#d97706", borderColor: "#d97706" }}>
+                                Registrar →
+                              </button>
+                              <span style={{ fontSize: 10, color: "#92400e", fontWeight: 600, textAlign: "right" as const }}>
+                                Cierre al fin de semana
+                              </span>
+                            </div>
+                          )
+                        ) : yaRegistrada ? (
+                          <button
+                            onClick={() => router.push("/ordenes/reporte")}
+                            style={{ fontSize: 12, color: "#16a34a", background: "none", border: "none", cursor: "pointer", fontWeight: 700 }}>
+                            #{ot.ordenTrabajoNum} Ver →
+                          </button>
+                        ) : ot.pasarNoche ? (
+                          <span style={{ fontSize: 11, fontWeight: 700, color: "#7c3aed", background: "#ede9fe", border: "1px solid #c4b5fd", borderRadius: 6, padding: "4px 10px" }}>
+                            🌙 En turno noche
+                          </span>
+                        ) : (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-end" }}>
+                            <button onClick={() => abrirRegistroPlan(ref)}
+                              style={{ ...S.btnPrimary(), padding: "7px 14px", fontSize: 13 }}>
+                              Registrar →
+                            </button>
+                            {user && user.rol <= 3 && (
+                              <button
+                                onClick={() => { setPasarNocheRef(ref); setPasarNocheMotivo("Sin tiempo en el turno"); setPasarNocheNota(""); }}
+                                style={{ fontSize: 11, fontWeight: 700, color: "#7c3aed", background: "none", border: "1px solid #c4b5fd", borderRadius: 6, padding: "4px 10px", cursor: "pointer", whiteSpace: "nowrap" as const }}>
+                                🌙 Pasar a Noche
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* ── Modal Bitácora Guardia ── */}
+                    {guardiaRef?.planId === ref.planId && guardiaRef?.ot.numeroOT === ot.numeroOT && (
+                      <div style={{ marginTop: 10, borderTop: "1px solid #fde68a", paddingTop: 10, background: "#fffbeb", borderRadius: "0 0 10px 10px", padding: "12px" }}>
+                        <p style={{ fontSize: 12, fontWeight: 700, color: "#92400e", marginBottom: 8 }}>
+                          📋 ¿Qué atendiste en este turno? ({guardiaRef?.ot.grupo ?? autoTurnoGuardia()} · {new Date().toLocaleDateString("es-BO")})
+                        </p>
+                        <textarea
+                          value={guardiaNota}
+                          onChange={e => setGuardiaNota(e.target.value)}
+                          placeholder="Describe las actividades atendidas: llamadas de operaciones, fallas, ajustes, inspecciones de ruta..."
+                          style={{ width: "100%", border: "1px solid #fcd34d", borderRadius: 6, padding: "8px 10px", fontSize: 12, outline: "none", boxSizing: "border-box" as const, resize: "vertical" as const, minHeight: 70, marginBottom: 8 }}
+                        />
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                          <label style={{ fontSize: 12, fontWeight: 600, color: "#92400e", whiteSpace: "nowrap" as const }}>HH atendidas en el turno:</label>
+                          <input type="number" min={0} max={12} step={0.5}
+                            value={guardiaHH}
+                            onChange={e => setGuardiaHH(Number(e.target.value))}
+                            style={{ width: 70, border: "1px solid #fcd34d", borderRadius: 6, padding: "5px 8px", fontSize: 13, outline: "none" }}
+                          />
+                        </div>
+                        {/* Historial del día */}
+                        {(ot.bitacora?.length ?? 0) > 0 && (
+                          <div style={{ marginBottom: 8, background: "white", borderRadius: 6, border: "1px solid #fde68a", padding: "8px 10px" }}>
+                            <p style={{ fontSize: 11, fontWeight: 700, color: "#92400e", marginBottom: 4 }}>Registros anteriores:</p>
+                            {ot.bitacora!.map((b, bi) => (
+                              <div key={bi} style={{ fontSize: 11, color: "#475569", borderBottom: "1px solid #fef3c7", paddingBottom: 4, marginBottom: 4 }}>
+                                <span style={{ fontWeight: 700 }}>{b.turno}</span> · {b.hhAtendidas}HH · <span style={{ fontStyle: "italic" }}>{b.nota}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                          <button onClick={() => setGuardiaRef(null)}
+                            style={{ fontSize: 12, padding: "5px 14px", borderRadius: 6, border: "1px solid #e2e8f0", background: "white", cursor: "pointer", color: "#64748b" }}>
+                            Cancelar
+                          </button>
+                          <button onClick={confirmarBitacora} disabled={savingGuardia || !guardiaNota.trim()}
+                            style={{ fontSize: 12, fontWeight: 700, padding: "5px 14px", borderRadius: 6, border: "none", background: savingGuardia || !guardiaNota.trim() ? "#fcd34d" : "#d97706", color: "white", cursor: savingGuardia || !guardiaNota.trim() ? "not-allowed" : "pointer" }}>
+                            {savingGuardia ? "Guardando…" : "✓ Guardar registro"}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Mini-form Pasar a Noche (inline, solo para esta OT) */}
+                    {pasarNocheRef?.planId === ref.planId && pasarNocheRef?.ot.numeroOT === ot.numeroOT && (
+                      <div style={{ marginTop: 10, borderTop: "1px solid #ede9fe", paddingTop: 10, background: "#faf5ff", borderRadius: "0 0 10px 10px", padding: "10px 12px" }}>
+                        <p style={{ fontSize: 12, fontWeight: 700, color: "#7c3aed", marginBottom: 8 }}>🌙 ¿Por qué pasa al turno noche?</p>
+                        <div style={{ display: "flex", flexWrap: "wrap" as const, gap: 6, marginBottom: 8 }}>
+                          {["Sin tiempo en el turno", "Falta de materiales", "Requiere condición especial", "Continúa trabajo iniciado"].map(m => (
+                            <button key={m} onClick={() => setPasarNocheMotivo(m)}
+                              style={{ fontSize: 11, padding: "4px 10px", borderRadius: 20, border: `1px solid ${pasarNocheMotivo === m ? "#7c3aed" : "#e2e8f0"}`, background: pasarNocheMotivo === m ? "#ede9fe" : "white", color: pasarNocheMotivo === m ? "#7c3aed" : "#64748b", cursor: "pointer", fontWeight: pasarNocheMotivo === m ? 700 : 400 }}>
+                              {m}
+                            </button>
+                          ))}
+                        </div>
+                        <input
+                          value={pasarNocheNota}
+                          onChange={e => setPasarNocheNota(e.target.value)}
+                          placeholder="Nota adicional para el supervisor nocturno (opcional)..."
+                          style={{ width: "100%", border: "1px solid #ddd6fe", borderRadius: 6, padding: "6px 10px", fontSize: 12, outline: "none", boxSizing: "border-box" as const, marginBottom: 8 }}
+                        />
+                        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                          <button onClick={() => setPasarNocheRef(null)}
+                            style={{ fontSize: 12, padding: "5px 14px", borderRadius: 6, border: "1px solid #e2e8f0", background: "white", cursor: "pointer", color: "#64748b" }}>
+                            Cancelar
+                          </button>
+                          <button onClick={confirmarPasarNoche} disabled={savingNoche}
+                            style={{ fontSize: 12, fontWeight: 700, padding: "5px 14px", borderRadius: 6, border: "none", background: savingNoche ? "#a78bfa" : "#7c3aed", color: "white", cursor: savingNoche ? "not-allowed" : "pointer" }}>
+                            {savingNoche ? "Guardando…" : "Confirmar 🌙"}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              </div>{/* fin padding-div */}
+            </div>{/* fin card */}
+
+            {/* Nueva OT Reactiva */}
+            <button onClick={abrirRegistroReactivo}
+              style={{ width: "100%", padding: "14px 18px", border: "2px dashed #fed7aa", borderRadius: 12, background: "#fffbeb", cursor: "pointer", textAlign: "left" as const }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <span style={{ fontSize: 28 }}>⚡</span>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: "#92400e" }}>Nueva OT Reactiva (CMR / CMP)</div>
+                  <div style={{ fontSize: 12, color: "#b45309", marginTop: 2 }}>Falla o trabajo no planificado · se registra en KPI reactivo (≤ 15%)</div>
+                </div>
+              </div>
+            </button>
+          </>
+        )}
+
+        {/* ════════════════ VISTA REGISTRO ═════════════════════════════════ */}
+        {view === "registro" && (
+          <>
+            {/* Contexto banner */}
+            {form.origenPlan ? (
+              <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 10, padding: "10px 14px", marginBottom: 14, display: "flex", gap: 10, alignItems: "center" }}>
+                <span style={S.badge("#2563eb")}>PLAN</span>
+                <span style={{ fontSize: 13, color: "#1d4ed8", fontWeight: 600, flex: 1 }}>
+                  OT {form.otJdeNumero} · {form.lineas[0]?.tipoOT} · {form.lineas[0]?.tag}
+                </span>
+                <button onClick={volverAlInicio} style={{ fontSize: 12, color: "#64748b", background: "none", border: "none", cursor: "pointer" }}>← Plan</button>
+              </div>
+            ) : (
+              <div style={{ background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: 10, padding: "10px 14px", marginBottom: 14, display: "flex", gap: 10, alignItems: "center" }}>
+                <span style={S.badge("#d97706")}>⚡ REACTIVA</span>
+                <span style={{ fontSize: 13, color: "#92400e", flex: 1 }}>OT no planificada — CMR / CMP</span>
+                <button onClick={volverAlInicio} style={{ fontSize: 12, color: "#64748b", background: "none", border: "none", cursor: "pointer" }}>← Plan</button>
+              </div>
+            )}
+
+            <Steps step={step} />
+
+            {/* ── Step 1: Encabezado ── */}
+            {step === 1 && (
+              <>
+                <div style={S.card}>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: "#0f2847", marginBottom: 16 }}>Encabezado</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 18px", marginBottom: 13 }}>
+                    <div>
+                      <label style={S.label}>Fecha</label>
+                      <input type="date" value={form.fecha} onChange={e => patchForm({ fecha: e.target.value })} style={S.input} />
+                      {errs.fecha && <p style={S.err}>{errs.fecha}</p>}
+                    </div>
+                    <div>
+                      <label style={S.label}>Turno</label>
+                      <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                        {TURNOS.map(t => {
+                          const a = form.turno === t;
+                          return <button key={t} type="button" onClick={() => patchForm({ turno: t })}
+                            style={{ padding: "7px 11px", borderRadius: 7, fontSize: 12, cursor: "pointer", border: a ? "2px solid #2563eb" : "1px solid #e2e8f0", background: a ? "#eff6ff" : "white", color: a ? "#1d4ed8" : "#64748b", fontWeight: a ? 700 : 400 }}>{t}</button>;
+                        })}
+                      </div>
+                      {errs.turno && <p style={S.err}>{errs.turno}</p>}
+                    </div>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: form.origenPlan ? "1fr" : "1fr auto", gap: "0 12px", alignItems: "start" }}>
+                    <div>
+                      <label style={S.label}>Área</label>
+                      <select value={form.areaCodigo} onChange={e => patchForm({ areaCodigo: e.target.value, tecnicos: [] })} style={S.select}>
+                        <option value="">— Seleccionar —</option>
+                        {areas.map(a => <option key={a.codigo} value={a.codigo}>{a.codigo} — {a.nombre}</option>)}
+                      </select>
+                      {errs.areaCodigo && <p style={S.err}>{errs.areaCodigo}</p>}
+                    </div>
+                    {!form.origenPlan && (
+                      <div>
+                        <label style={S.label}>N° OT <span style={{ color: "#94a3b8", fontWeight: 400 }}>(opc.)</span></label>
+                        <input
+                          type="text"
+                          value={form.otJdeNumero}
+                          onChange={e => patchForm({ otJdeNumero: e.target.value.toUpperCase() })}
+                          placeholder="100234"
+                          style={{ ...S.input, fontFamily: "monospace", letterSpacing: "0.05em", width: 150 }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <TecnicosPanel
+                  areaCodigo={form.areaCodigo}
+                  tecnicos={form.tecnicos}
+                  personalAsignadoPlan={[]}
+                  onChange={tecnicos => patchForm({ tecnicos })}
+                  error={errs.tecnicos}
+                />
+
+                <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                  <button onClick={() => { if (validateStep1()) setStep(2); }} style={S.btnPrimary()}>Continuar →</button>
+                </div>
+              </>
+            )}
+
+            {/* ── Step 2: Trabajo ── */}
+            {step === 2 && (
+              <>
+                {/* ── Panel técnicos (siempre visible en step 2 para plan OTs, o si step 1 fue saltado) ── */}
+                <TecnicosPanel
+                  areaCodigo={form.areaCodigo}
+                  tecnicos={form.tecnicos}
+                  personalAsignadoPlan={form.origenPlan ? (planRefs.find(r => r.planId === form.programacionSemanalId && r.ot.numeroOT === form.otJdeNumero)?.ot.personalAsignado ?? []) : []}
+                  onChange={tecnicos => patchForm({ tecnicos })}
+                  error={errs.tecnicos}
+                />
+
+                {/* Lineas confirmadas */}
+                {form.lineas.map((l, idx) => {
+                  if (editLinea && editIdx === idx) return null; // mostrar editor abajo
+                  const tipoColor = l.tipoOT ? TIPO_COLOR[l.tipoOT as TipoOT] : "#e2e8f0";
+                  return (
+                    <div key={l.id} style={{ ...S.card, borderLeft: `4px solid ${tipoColor}`, opacity: editLinea ? 0.4 : 1 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginBottom: 2 }}>
+                            <span style={{ fontWeight: 800, fontSize: 14 }}>{l.tag}</span>
+                            {l.tipoOT && <span style={S.badge(tipoColor)}>{l.tipoOT}</span>}
+                            {l.criticidad && <span style={S.badge(CRIT_COLOR[l.criticidad] ?? "#64748b")}>Crit. {l.criticidad}</span>}
+                          </div>
+                          <p style={{ fontSize: 12, color: "#64748b", marginBottom: 2 }}>{l.descripcionEquipo}</p>
+                          {isCorrectivo(l.tipoOT) && l.sintoma && <p style={{ fontSize: 12, color: "#475569" }}>{l.sintoma}{l.causaProbable ? ` → ${l.causaProbable}` : ""}</p>}
+                          {isPreventivo(l.tipoOT) && l.descripcionTrabajo && <p style={{ fontSize: 12, color: "#475569" }}>{l.descripcionTrabajo}</p>}
+                          {l.tiempoRealHrs && <p style={{ fontSize: 12, color: "#16a34a", fontWeight: 600, marginTop: 2 }}>⏱ {l.tiempoRealHrs} hrs reales</p>}
+                        </div>
+                        <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
+                          <button type="button" onClick={() => openEdit(idx)} disabled={!!editLinea}
+                            style={{ ...S.btnGhost, padding: "5px 10px", fontSize: 12 }}>Editar</button>
+                          {!(form.origenPlan && idx === 0) && (
+                            <button type="button" onClick={() => removeLinea(idx)} disabled={!!editLinea}
+                              style={{ ...S.btnGhost, padding: "5px 10px", fontSize: 12, color: "#dc2626", borderColor: "#fecaca" }}>✕</button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* Editor inline */}
+                {editLinea && (
+                  <LineaEditor
+                    linea={editLinea}
+                    area={form.areaCodigo}
+                    isNew={isNewLinea}
+                    soloCorrectivos={!form.origenPlan}
+                    onConfirm={l => confirmLinea(l)}
+                    onCancel={cancelLinea}
+                  />
+                )}
+
+                {!editLinea && (
+                  <button type="button"
+                    onClick={() => { setEditLinea(newLinea()); setEditIdx(null); setIsNewLinea(true); }}
+                    style={{ width: "100%", padding: 13, marginBottom: 12, border: "2px dashed #cbd5e1", borderRadius: 10, background: "white", color: "#2563eb", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+                    + Agregar{form.origenPlan ? " otro" : ""} equipo intervenido
+                  </button>
+                )}
+
+                {errs.lineas && <p style={{ ...S.err, marginBottom: 10 }}>{errs.lineas}</p>}
+                {errs.edit && <p style={{ color: "#d97706", fontSize: 12, marginBottom: 10 }}>⚠ {errs.edit}</p>}
+
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <button onClick={() => { cancelLinea(); setStep(1); }} style={S.btnGhost}>← Encabezado</button>
+                  <button onClick={() => { if (validateStep2()) setStep(3); }} style={S.btnPrimary()}>Revisar →</button>
+                </div>
+              </>
+            )}
+
+            {/* ── Step 3: Revisión ── */}
+            {step === 3 && (
+              <>
+                <div style={S.card}>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: "#0f2847", marginBottom: 12 }}>Resumen</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 22px" }}>
+                    <div><span style={S.label}>Fecha</span><p style={{ fontSize: 14, color: "#1e293b" }}>{form.fecha}</p></div>
+                    <div><span style={S.label}>Turno</span><p style={{ fontSize: 14, color: "#1e293b" }}>{form.turno}</p></div>
+                    <div><span style={S.label}>Área</span><p style={{ fontSize: 14, color: "#1e293b" }}>{areas.find(a => a.codigo === form.areaCodigo)?.nombre ?? form.areaCodigo}</p></div>
+                    <div><span style={S.label}>Técnicos</span><p style={{ fontSize: 13, color: "#1e293b", lineHeight: 1.5 }}>{form.tecnicos.map(t => t.nombreCompleto).join(", ")}</p></div>
+                    {form.origenPlan ? (
+                      <>
+                        <div><span style={S.label}>Origen</span><span style={S.badge("#2563eb")}>PLAN SEMANAL</span></div>
+                        <div><span style={S.label}>OT Plan</span><p style={{ fontSize: 14, color: "#1e293b", fontFamily: "monospace", fontWeight: 700 }}>{form.otJdeNumero}</p></div>
+                      </>
+                    ) : (
+                      <div><span style={S.label}>Tipo</span><span style={S.badge("#d97706")}>⚡ REACTIVA</span></div>
+                    )}
+                  </div>
+                </div>
+
+                <div style={S.card}>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: "#0f2847", marginBottom: 12 }}>Equipos intervenidos ({form.lineas.length})</div>
+                  {form.lineas.map((l, i) => (
+                    <div key={l.id} style={{ borderLeft: `3px solid ${l.tipoOT ? TIPO_COLOR[l.tipoOT as TipoOT] : "#e2e8f0"}`, paddingLeft: 12, marginBottom: i < form.lineas.length - 1 ? 14 : 0, paddingBottom: i < form.lineas.length - 1 ? 14 : 0, borderBottom: i < form.lineas.length - 1 ? "1px solid #f1f5f9" : "none" }}>
+                      <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 2 }}>
+                        <span style={{ fontWeight: 800, fontSize: 13 }}>{l.tag}</span>
+                        {l.tipoOT && <span style={S.badge(TIPO_COLOR[l.tipoOT as TipoOT])}>{l.tipoOT}</span>}
+                      </div>
+                      <p style={{ fontSize: 12, color: "#64748b", marginBottom: 2 }}>{l.descripcionEquipo}</p>
+                      {isCorrectivo(l.tipoOT) && (
+                        <>
+                          {l.sintoma && <p style={{ fontSize: 12, color: "#475569" }}>Síntoma: {l.sintoma}</p>}
+                          {l.causaProbable && <p style={{ fontSize: 12, color: "#475569" }}>Causa: {l.causaProbable}</p>}
+                          {l.resolucionAplicada && <p style={{ fontSize: 12, color: "#475569" }}>Resolución: {l.resolucionAplicada}</p>}
+                          <div style={{ display: "flex", gap: 12, marginTop: 2 }}>
+                            {l.tiempoEstimadoHrs && <span style={{ fontSize: 12, color: "#94a3b8" }}>Est: {l.tiempoEstimadoHrs}h</span>}
+                            {l.tiempoRealHrs && <span style={{ fontSize: 12, color: "#16a34a", fontWeight: 600 }}>Real: {l.tiempoRealHrs}h</span>}
+                          </div>
+                        </>
+                      )}
+                      {isPreventivo(l.tipoOT) && (
+                        <>
+                          {l.descripcionTrabajo && <p style={{ fontSize: 12, color: "#475569" }}>{l.descripcionTrabajo}</p>}
+                          {l.tareasEjecutadas.length > 0 && <ul style={{ margin: "3px 0", paddingLeft: 16 }}>{l.tareasEjecutadas.map((t, ti) => <li key={ti} style={{ fontSize: 12, color: "#64748b" }}>{t}</li>)}</ul>}
+                          {l.tiempoRealHrs && <p style={{ fontSize: 12, color: "#16a34a", fontWeight: 600, marginTop: 2 }}>Real: {l.tiempoRealHrs}h</p>}
+                        </>
+                      )}
+                      {l.observaciones && <p style={{ fontSize: 12, color: "#94a3b8", fontStyle: "italic", marginTop: 2 }}>{l.observaciones}</p>}
+                    </div>
+                  ))}
+                </div>
+
+                {submitErr && (
+                  <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "11px 14px", marginBottom: 12 }}>
+                    <p style={{ color: "#dc2626", fontSize: 13, fontWeight: 600, marginBottom: 2 }}>Error al guardar</p>
+                    <p style={{ color: "#dc2626", fontSize: 12 }}>{submitErr}</p>
+                  </div>
+                )}
+
+                <div style={{ ...S.card, background: "#f8fafc" }}>
+                  <p style={{ fontSize: 12, color: "#64748b", lineHeight: 1.7, marginBottom: 12 }}>
+                    <strong style={{ color: "#1e293b" }}>Borrador</strong>: guarda sin enviar.{" "}
+                    <strong style={{ color: "#1e293b" }}>Enviar a revisión</strong>: el supervisor recibirá para aprobar.
+                    {form.origenPlan && <><br /><strong style={{ color: "#1d4ed8" }}>El estado en el plan semanal se actualizará automáticamente.</strong></>}
+                  </p>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                    <button onClick={() => setStep(2)} style={S.btnGhost} disabled={submitting}>← Editar</button>
+                    <button onClick={() => submit("borrador")} style={{ ...S.btnOutline, opacity: submitting ? 0.6 : 1 }} disabled={submitting}>
+                      {submitting ? "Guardando..." : "💾 Borrador"}
+                    </button>
+                    <button onClick={() => submit("pendiente_revision")} style={{ ...S.btnGreen(submitting), marginLeft: "auto" }} disabled={submitting}>
+                      {submitting ? "Enviando..." : "Enviar a revisión ✓"}
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </>
+        )}
+
+      </div>
+    </div>
+  );
+}
