@@ -1,0 +1,33 @@
+FROM node:20-alpine
+
+RUN apk add --no-cache libc6-compat
+
+WORKDIR /app
+
+# Instalar dependencias
+COPY package.json package-lock.json ./
+RUN npm ci
+
+# Copiar schema y config de Prisma
+COPY prisma ./prisma
+COPY prisma.config.ts ./
+
+# Copiar tsconfig y script de migración
+COPY tsconfig.json tsconfig.scripts.json ./
+COPY scripts ./scripts
+
+# Copiar .env si existe (opcional, las vars vienen por environment)
+COPY .env* ./ 2>/dev/null || true
+
+# Generar cliente Prisma
+RUN npx prisma generate
+
+# Script de entrada: aplica schema y luego migra datos
+CMD sh -c "\
+  echo '⏳ Aplicando schema Prisma...' && \
+  npx prisma db push --skip-generate && \
+  echo '✅ Schema aplicado' && \
+  echo '⏳ Migrando datos MongoDB → PostgreSQL...' && \
+  npx ts-node --project tsconfig.scripts.json scripts/migrate-mongo-to-pg.ts && \
+  echo '✅ Migración completada' \
+"
