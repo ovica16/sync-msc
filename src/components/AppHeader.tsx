@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useUser, rolNombre } from "@/context/AuthContext";
+import Image from "next/image";
 
 const ROL_COLOR: Record<number, string> = {
   1: "#7c3aed",
@@ -39,7 +40,7 @@ export default function AppHeader({ backHref }: Props) {
 
       <Link href="/inicio" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/logo1.png" alt="Sync MSC" style={{ width: 38, height: 38, objectFit: "contain" }} />
+        <Image src="/LOGO1.png" alt="Sync MSC" width={38} height={38} style={{ objectFit: "contain" }} />
         <div>
           <div style={{ fontWeight: 800, fontSize: 15, color: "#0f2847", letterSpacing: "0.03em" }}>
             Sync MSC <span style={{ fontSize: 10, fontWeight: 500, color: "#64748b" }}>MP</span>

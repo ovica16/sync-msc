@@ -404,3 +404,23 @@ model Contador {
   nombre String @id
   valor  Int    @default(0)
 }
+
+// ─── CHECKLIST MANTTO ─────────────────────────────────────────────────────────
+
+model ChecklistMantto {
+  id           String   @id @default(cuid())
+  codigo       String   @default("")
+  areaCodigo   String   @default("*")
+  nombre       String
+  disciplina   String   // Mecanico | Electrico | Instrumentacion | Universal
+  nivelTag     Int?
+  areaProceso  String   @default("general")
+  categoriaISO String?
+  items        Json     @default("[]") // ChecklistItem[]
+  activo       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([disciplina, nivelTag, areaProceso, activo])
+  @@index([areaCodigo, activo])
+}

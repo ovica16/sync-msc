@@ -1537,7 +1537,7 @@ function ChecklistTab() {
       fetch("/api/checklist-mantto?all=true").then((r) => r.json()),
       fetch("/api/areas").then((r) => r.json()),
     ]);
-    setItems(cl); setAreas(ar); setLoading(false);
+    setItems(Array.isArray(cl) ? cl : []); setAreas(Array.isArray(ar) ? ar : []); setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -1666,7 +1666,9 @@ function ChecklistTab() {
           <button
             onClick={async () => {
               const j = await fetch("/api/seed/checklists", { method: "POST" }).then(r => r.json());
-              alert(`Checklists sembrados: ${j.total} plantillas\n\n${(j.resumen as string[]).join("\n")}`);
+              if (!j.ok) { alert(`Error: ${j.error ?? "desconocido"}`); return; }
+              const detalle = Array.isArray(j.resumen) && j.resumen.length > 0 ? `\n\n${(j.resumen as string[]).join("\n")}` : "";
+              alert(`Sembrados: ${j.creados} nuevos · ${j.actualizados ?? 0} actualizados${detalle}`);
               load();
             }}
             style={{ ...C.btnOutline, fontSize: 12 }}>
