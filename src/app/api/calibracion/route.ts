@@ -1,14 +1,20 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest } from "next/server";
 
-async function siguienteCertificado(): Promise<string> {
-  const yy = String(new Date().getFullYear()).slice(-2);
+// Formato nuevo: {seq}_{TAG}_{YYYYMMDD}
+// La secuencia se reinicia cada año. Para 2026 el contador arranca en 277
+// (inicializado en docker-start.sh) para que el próximo sea 278.
+async function siguienteCertificado(tag: string, fecha: string): Promise<string> {
+  const year = new Date(fecha + "T12:00:00").getFullYear();
+  const dateStr = fecha.replace(/-/g, ""); // 20260601
+  // TAG limpio: mantener alfanuméricos y guiones, sin barras ni espacios
+  const tagLimpio = tag.replace(/[/\\*?:"<>| ]/g, "").toUpperCase();
   const counter = await prisma.contador.upsert({
-    where: { nombre: "calibracion" },
+    where: { nombre: `calibracion-${year}` },
     update: { valor: { increment: 1 } },
-    create: { nombre: "calibracion", valor: 1 },
+    create: { nombre: `calibracion-${year}`, valor: 1 },
   });
-  return `INS-CAL-${yy}-${String(counter.valor).padStart(4, "0")}`;
+  return `${counter.valor}_${tagLimpio}_${dateStr}`;
 }
 
 export async function GET(req: NextRequest) {
@@ -32,7 +38,10 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const numeroCertificado = await siguienteCertificado();
+    const numeroCertificado = await siguienteCertificado(
+      String(body.tag).toUpperCase(),
+      body.fecha ?? new Date().toISOString().slice(0, 10),
+    );
 
     const registro = await prisma.registroCalibracion.create({
       data: {

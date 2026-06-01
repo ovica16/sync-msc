@@ -311,7 +311,13 @@ export default function CertificadoPage() {
             style={{ border: "1px solid rgba(255,255,255,0.35)", color: "white", borderRadius: 6, padding: "4px 12px", fontSize: 11, textDecoration: "none" }}>
             🏷 Sticker
           </Link>
-          <button onClick={() => window.print()}
+          <button onClick={() => {
+            // Nombre del PDF = numeroCertificado (formato: seq_TAG_YYYYMMDD)
+            const prev = document.title;
+            document.title = record.numeroCertificado;
+            window.print();
+            setTimeout(() => { document.title = prev; }, 1000);
+          }}
             style={{ background: "white", color: "#0d2f5e", border: "none", borderRadius: 6, padding: "4px 16px", fontWeight: 700, fontSize: 11, cursor: "pointer" }}>
             Imprimir / PDF
           </button>
