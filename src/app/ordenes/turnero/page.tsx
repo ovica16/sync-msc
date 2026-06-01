@@ -174,9 +174,20 @@ export default function TurneroPage() {
     else setSemana(n);
   }
 
-  // ── Identificar OPEPLANT del plan y su grupo (Diurno/Nocturno) ──────────────
+  // ── Áreas únicas presentes en los programas cargados ─────────────────────────
+  type AreaInfo = { areaCodigo: string; disciplina: string };
+  const areasUnicas: AreaInfo[] = [];
+  const areasSeen = new Set<string>();
+  for (const prog of programas) {
+    const key = prog.areaCodigo || prog.disciplina;
+    if (!areasSeen.has(key)) {
+      areasSeen.add(key);
+      areasUnicas.push({ areaCodigo: prog.areaCodigo, disciplina: prog.disciplina });
+    }
+  }
 
-  type OpeplantInfo = { numeroOT: string; grupo: string; disciplina: string; dia: string };
+  // ── Identificar OPEPLANT del plan por área y grupo ────────────────────────────
+  type OpeplantInfo = { numeroOT: string; grupo: string; disciplina: string; dia: string; areaCodigo: string };
   const opeplantEntradas: OpeplantInfo[] = [];
   for (const prog of programas) {
     for (const ot of prog.otsProgramadas) {
@@ -186,24 +197,24 @@ export default function TurneroPage() {
           grupo: ot.grupo,
           disciplina: prog.disciplina,
           dia: ot.dia,
+          areaCodigo: prog.areaCodigo,
         });
       }
     }
   }
 
-  // Grupos únicos: Diurno y Nocturno
   const grupos = ["Diurno", "Nocturno"] as const;
 
-  // Agrupar OTs reactivas: grupo → día → lista de OTs
-  function otsDelGrupo(grupo: string): OTReactiva[] {
-    const turnoMap: Record<string, string> = { Diurno: "Diurno", Nocturno: "Nocturno" };
-    return otsReactivas.filter(ot => ot.turno === (turnoMap[grupo] ?? grupo));
+  // OTs reactivas filtradas por área y turno
+  function otsDeAreaGrupo(areaCodigo: string, grupo: string): OTReactiva[] {
+    return otsReactivas.filter(ot =>
+      ot.turno === grupo && (!ot.areaCodigo || ot.areaCodigo === areaCodigo)
+    );
   }
 
-  function otsPorDia(grupo: string, diaAbrev: string): OTReactiva[] {
-    const fecha = fechasDias[diaAbrev];
-    const fechaStr = isoDateStr(fecha);
-    return otsDelGrupo(grupo).filter(ot => ot.fecha.startsWith(fechaStr));
+  function otsPorAreaDia(areaCodigo: string, grupo: string, diaAbrev: string): OTReactiva[] {
+    const fechaStr = isoDateStr(fechasDias[diaAbrev]);
+    return otsDeAreaGrupo(areaCodigo, grupo).filter(ot => ot.fecha.startsWith(fechaStr));
   }
 
   // KPIs globales
@@ -274,43 +285,66 @@ export default function TurneroPage() {
             <p style={{ fontSize: 13 }}>Verifica que el programa semanal esté cargado</p>
           </div>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            {grupos.map(grupo => {
-              const otsGrupo = otsDelGrupo(grupo);
-              const hhGrupo  = otsGrupo.reduce((s, ot) => s + ot.lineas.reduce((a, l) => a + (l.tiempoRealHrs ?? 0), 0), 0);
-              const opepGrupo = opeplantEntradas.filter(e => e.grupo === grupo);
-              if (opepGrupo.length === 0) return null;
-
-              const opepNums = [...new Set(opepGrupo.map(e => e.numeroOT))].join(", ");
+          <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+            {areasUnicas.map(area => {
+              const opepDeArea = opeplantEntradas.filter(e => e.areaCodigo === area.areaCodigo);
+              if (opepDeArea.length === 0) return null;
+              const otsArea = otsReactivas.filter(ot => !ot.areaCodigo || ot.areaCodigo === area.areaCodigo);
+              const hhArea = otsArea.reduce((s, ot) => s + ot.lineas.reduce((a, l) => a + (l.tiempoRealHrs ?? 0), 0), 0);
 
               return (
-                <div key={grupo} style={{ background: "white", borderRadius: 14, overflow: "hidden", boxShadow: "0 1px 6px rgba(0,0,0,0.07)" }}>
-                  {/* Cabecera grupo */}
-                  <div style={{
-                    background: grupo === "Nocturno" ? "#0f2847" : "#fef3c7",
-                    color: grupo === "Nocturno" ? "#e2e8f0" : "#92400e",
-                    padding: "12px 18px",
-                    display: "flex", justifyContent: "space-between", alignItems: "center",
-                  }}>
-                    <div>
-                      <span style={{ fontWeight: 800, fontSize: 15 }}>
-                        {grupo === "Nocturno" ? "🌙" : "☀️"} Turno {grupo}
+                <div key={area.areaCodigo}>
+                  {/* Encabezado de área */}
+                  {areasUnicas.length > 1 && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, padding: "8px 0" }}>
+                      <div style={{ height: 2, flex: 1, background: "#e2e8f0" }} />
+                      <span style={{ fontSize: 13, fontWeight: 800, color: "#0f2847", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 20, padding: "4px 14px" }}>
+                        {area.disciplina} · Área {area.areaCodigo}
                       </span>
-                      <span style={{ fontSize: 11, marginLeft: 12, opacity: 0.7 }}>
-                        OPEPLANT {opepNums} · {opepGrupo[0]?.disciplina}
+                      <span style={{ fontSize: 11, color: "#d97706", fontWeight: 700 }}>
+                        {otsArea.length} OTs · {Math.round(hhArea * 10) / 10}HH semana
                       </span>
+                      <div style={{ height: 2, flex: 1, background: "#e2e8f0" }} />
                     </div>
-                    <span style={{ fontSize: 12, fontWeight: 700 }}>
-                      {otsGrupo.length} OT{otsGrupo.length !== 1 ? "s" : ""} · {Math.round(hhGrupo * 10) / 10}HH
-                    </span>
-                  </div>
+                  )}
 
-                  {/* Días de la semana */}
-                  <div style={{ display: "flex", flexDirection: "column" }}>
-                    {DIAS_SEMANA.map((dia, idx) => {
-                      const otsDelDia = otsPorDia(grupo, dia);
-                      const fecha = fechasDias[dia];
-                      const hhDia = otsDelDia.reduce((s, ot) => s + ot.lineas.reduce((a, l) => a + (l.tiempoRealHrs ?? 0), 0), 0);
+                  <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                  {grupos.map(grupo => {
+                    const otsGrupo = otsDeAreaGrupo(area.areaCodigo, grupo);
+                    const hhGrupo  = otsGrupo.reduce((s, ot) => s + ot.lineas.reduce((a, l) => a + (l.tiempoRealHrs ?? 0), 0), 0);
+                    const opepGrupo = opepDeArea.filter(e => e.grupo === grupo);
+                    if (opepGrupo.length === 0) return null;
+
+                    const opepNums = [...new Set(opepGrupo.map(e => e.numeroOT))].join(", ");
+
+                    return (
+                      <div key={grupo} style={{ background: "white", borderRadius: 14, overflow: "hidden", boxShadow: "0 1px 6px rgba(0,0,0,0.07)" }}>
+                        {/* Cabecera grupo */}
+                        <div style={{
+                          background: grupo === "Nocturno" ? "#0f2847" : "#fef3c7",
+                          color: grupo === "Nocturno" ? "#e2e8f0" : "#92400e",
+                          padding: "12px 18px",
+                          display: "flex", justifyContent: "space-between", alignItems: "center",
+                        }}>
+                          <div>
+                            <span style={{ fontWeight: 800, fontSize: 15 }}>
+                              {grupo === "Nocturno" ? "🌙" : "☀️"} Turno {grupo}
+                            </span>
+                            <span style={{ fontSize: 11, marginLeft: 12, opacity: 0.7 }}>
+                              OPEPLANT {opepNums} · {area.disciplina}
+                            </span>
+                          </div>
+                          <span style={{ fontSize: 12, fontWeight: 700 }}>
+                            {otsGrupo.length} OT{otsGrupo.length !== 1 ? "s" : ""} · {Math.round(hhGrupo * 10) / 10}HH
+                          </span>
+                        </div>
+
+                        {/* Días de la semana */}
+                        <div style={{ display: "flex", flexDirection: "column" }}>
+                          {DIAS_SEMANA.map((dia, idx) => {
+                            const otsDelDia = otsPorAreaDia(area.areaCodigo, grupo, dia);
+                            const fecha = fechasDias[dia];
+                            const hhDia = otsDelDia.reduce((s, ot) => s + ot.lineas.reduce((a, l) => a + (l.tiempoRealHrs ?? 0), 0), 0);
 
                       return (
                         <div key={dia} style={{ borderTop: idx > 0 ? "1px solid #f1f5f9" : undefined }}>
@@ -367,14 +401,18 @@ export default function TurneroPage() {
                     })}
                   </div>
 
-                  {/* Footer del grupo: total semana */}
-                  <div style={{ background: "#f1f5f9", padding: "10px 18px", display: "flex", justifyContent: "flex-end", gap: 24 }}>
-                    <span style={{ fontSize: 12, color: "#64748b" }}>
-                      Total semana: <strong>{otsGrupo.length} OT{otsGrupo.length !== 1 ? "s" : ""}</strong>
-                    </span>
-                    <span style={{ fontSize: 12, color: "#d97706", fontWeight: 700 }}>
-                      {Math.round(hhGrupo * 10) / 10} HH acumuladas
-                    </span>
+                        {/* Footer del grupo */}
+                        <div style={{ background: "#f1f5f9", padding: "10px 18px", display: "flex", justifyContent: "flex-end", gap: 24 }}>
+                          <span style={{ fontSize: 12, color: "#64748b" }}>
+                            Total semana: <strong>{otsGrupo.length} OT{otsGrupo.length !== 1 ? "s" : ""}</strong>
+                          </span>
+                          <span style={{ fontSize: 12, color: "#d97706", fontWeight: 700 }}>
+                            {Math.round(hhGrupo * 10) / 10} HH acumuladas
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
                   </div>
                 </div>
               );
