@@ -53,7 +53,9 @@ export async function GET(req: NextRequest) {
       ...(estado     ? { estado }                  : {}),
     },
     include: {
-      otsProgramadas: true,
+      otsProgramadas: searchParams.get("dia")
+        ? { where: { dia: searchParams.get("dia")! } }
+        : true,
       personal: true,
       resumenDias: true,
     },

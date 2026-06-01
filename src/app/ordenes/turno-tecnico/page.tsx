@@ -44,8 +44,10 @@ type AreaOpt = { codigo: string; nombre: string; superintendencia?: string };
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const DIA_MAP = ["Do", "Lu", "Ma", "Mi", "Ju", "Vi", "Sa"] as const;
-const GRUPOS_DIURNO  = new Set(["G1","G2","G3","G4","Diurno"]);
-const GRUPOS_NOCTURNO = new Set(["Nocturno"]);
+// El grupo "Diurno" y "Nocturno" son específicamente los turneros
+// G1-G4 son técnicos de mantenimiento regular (no turneros)
+const GRUPO_DIURNO   = "Diurno";
+const GRUPO_NOCTURNO = "Nocturno";
 
 function getFechaTurno() {
   const ahora = new Date();
@@ -194,7 +196,7 @@ export default function ReporteTurnoTecnicoPage() {
     const area = areaEfectiva;
     const { semana, anio } = getWeekYear(form.fecha);
     const diaOT = diaSemana(form.fecha);
-    const gruposValidos = form.turno === "Nocturno" ? GRUPOS_NOCTURNO : GRUPOS_DIURNO;
+    const grupoTurno = form.turno === "Nocturno" ? GRUPO_NOCTURNO : GRUPO_DIURNO;
 
     // ── 1. OTs registradas ──────────────────────────────────────────────────
     const paramsOrd = new URLSearchParams({ fecha: form.fecha, turno: form.turno, limit: "100" });
@@ -209,7 +211,9 @@ export default function ReporteTurnoTecnicoPage() {
     setOtsReg(registradas);
 
     // ── 2. OTs del plan semanal (incluyendo bitácora OPEPLANT) ──────────────
-    const paramsPlan = new URLSearchParams({ semana: String(semana), anio: String(anio), limit: "20" });
+    // Filtrar en el servidor: solo OTs del día y del área
+    // El API acepta "dia" para filtrar otsProgramadas server-side
+    const paramsPlan = new URLSearchParams({ semana: String(semana), anio: String(anio), limit: "20", dia: diaOT });
     if (area) paramsPlan.set("areaCodigo", area);
     const dataPlanes = await fetch(`/api/programacion-semanal?${paramsPlan}`).then(r => r.json()).catch(() => []);
 
@@ -217,16 +221,8 @@ export default function ReporteTurnoTecnicoPage() {
     for (const prog of (Array.isArray(dataPlanes) ? dataPlanes : [])) {
       const disc = prog.disciplina ?? "";
       for (const ot of (prog.otsProgramadas ?? [])) {
-        // Filtrar por día y grupo/turno
-        if (ot.dia !== diaOT) continue;
-        if (!gruposValidos.has(ot.grupo)) continue;
-        // Si es técnico, filtrar por nombre en personalAsignado
-        if (user.rol === 4) {
-          const asignado = (ot.personalAsignado ?? []).some((n: string) =>
-            n.toLowerCase().includes(user.nombre.toLowerCase())
-          );
-          if (!asignado && !ot.esGuardia) continue;
-        }
+        // Solo el grupo exacto del turno (Diurno / Nocturno)
+        if (ot.grupo !== grupoTurno) continue;
         planes.push({
           id: `plan-${prog._id}-${ot.id ?? ot.numeroOT}`,
           numeroOT: ot.numeroOT,
