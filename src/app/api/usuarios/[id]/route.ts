@@ -21,11 +21,15 @@ export async function PUT(req: NextRequest, { params }: Ctx) {
     delete body.passwordHash;
 
     const { areas, ...rest } = body;
+    // Convert rol to integer if it is passed as a string or number
+    const rol = body.rol !== undefined ? Number(body.rol) : undefined;
+    delete rest.rol;
 
     await prisma.usuario.update({
       where: { id },
       data: {
         ...rest,
+        ...(rol !== undefined ? { rol } : {}),
         ...(passwordHash ? { passwordHash } : {}),
         ...(areas !== undefined ? {
           areas: {
