@@ -9,6 +9,7 @@ type Modulo = {
   icon: React.ReactNode; color: string; badge?: string;
   soloInst?: boolean;   // true = solo disciplina INST (+ admin)
   soloSup?: boolean;    // true = solo roles 1–3
+  soloAdmin?: boolean;  // true = solo rol 1 (Admin)
 };
 
 const TODOS_MODULOS: Modulo[] = [
@@ -109,9 +110,9 @@ const TODOS_MODULOS: Modulo[] = [
     href: "/ordenes/configuracion",
     label: "Configuración / Adición de Datos",
     descripcion: "Datos maestros, personal y parámetros",
-    badge: "Roles 1–3",
+    badge: "Administrador",
     color: "#374151",
-    soloSup: true,
+    soloAdmin: true,
     icon: (
       <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="12" cy="12" r="3" />
@@ -165,6 +166,7 @@ export default function OrdenesPage() {
 
   const modulos = TODOS_MODULOS.filter((m) => {
     if (esAdmin) return true;
+    if (m.soloAdmin && !esAdmin) return false;
     if (m.soloInst && !esInst) return false;
     if (m.soloSup  && !puedeConf) return false;
     return true;

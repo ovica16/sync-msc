@@ -39,6 +39,9 @@ type FormData = {
   observaciones: string;
   otAsociada: string;
   stickerImpreso: boolean;
+  estado: string;
+  tecnicoFirma: string;
+  supervisorFirma: string;
 };
 
 type PatronDoc = {
@@ -99,6 +102,9 @@ type RegistroDoc = {
   stickerImpreso: boolean;
   otAsociada?: string;
   areaCodigo: string;
+  estado?: string;
+  tecnicoFirma?: string;
+  supervisorFirma?: string;
   createdAt?: string;
 };
 
@@ -117,7 +123,7 @@ const TIPOS_VARIABLE = [
   "pH", "Conductividad", "Posición", "Velocidad", "Otro",
 ];
 
-const STEP_LABELS = ["Instrumento", "Patrón", "Puntos", "Revisión"];
+const STEP_LABELS = ["Instrumento", "Patrón", "Puntos", "Firma Técnico", "Revisión"];
 
 const TIPOS_PATRON = [
   "Presión", "Temperatura", "Flujo", "Nivel",
@@ -159,6 +165,9 @@ function emptyForm(): FormData {
     unidad: "",
     temperatura: "", humedad: "",
     resultadoManual: "", observaciones: "", otAsociada: "", stickerImpreso: false,
+    estado: "revision",
+    tecnicoFirma: "",
+    supervisorFirma: "",
   };
 }
 
@@ -378,6 +387,165 @@ function StepIndicator({ step }: { step: number }) {
   );
 }
 
+// ─── Signature Selector Component ─────────────────────────────────────────────
+
+type SignatureSelectorProps = {
+  value: string;
+  onChange: (val: string) => void;
+  label: string;
+};
+
+function SignatureSelector({ value, onChange, label }: SignatureSelectorProps) {
+  const [mode, setMode] = useState<"dibujar" | "subir">("dibujar");
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [isDrawing, setIsDrawing] = useState(false);
+
+  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = "round";
+    ctx.strokeStyle = "#0f2847";
+
+    const rect = canvas.getBoundingClientRect();
+    const x = ("touches" in e) ? e.touches[0].clientX - rect.left : e.clientX - rect.left;
+    const y = ("touches" in e) ? e.touches[0].clientY - rect.top : e.clientY - rect.top;
+
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    setIsDrawing(true);
+  };
+
+  const draw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    if (!isDrawing) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const tx = ("touches" in e) ? e.touches[0].clientX - rect.left : e.clientX - rect.left;
+    const ty = ("touches" in e) ? e.touches[0].clientY - rect.top : e.clientY - rect.top;
+
+    ctx.lineTo(tx, ty);
+    ctx.stroke();
+    e.preventDefault();
+  };
+
+  const stopDrawing = () => {
+    if (!isDrawing) return;
+    setIsDrawing(false);
+    saveCanvas();
+  };
+
+  const saveCanvas = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const dataUrl = canvas.toDataURL("image/png");
+    onChange(dataUrl);
+  };
+
+  const clearCanvas = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    onChange("");
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      if (event.target?.result && typeof event.target.result === "string") {
+        onChange(event.target.result);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  return (
+    <div style={{ background: "#f8fafc", border: "1px dashed #cbd5e1", borderRadius: 10, padding: 16 }}>
+      <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#64748b", letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 8 }}>{label}</label>
+      
+      <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+        <button
+          type="button"
+          style={{
+            padding: "4px 10px",
+            borderRadius: 6,
+            border: "1px solid",
+            fontSize: 12,
+            cursor: "pointer",
+            background: mode === "dibujar" ? "#2563eb" : "white",
+            color: mode === "dibujar" ? "white" : "#475569",
+            borderColor: mode === "dibujar" ? "#2563eb" : "#cbd5e1",
+          }}
+          onClick={() => { setMode("dibujar"); onChange(""); }}
+        >
+          ✍️ Dibujar Firma
+        </button>
+        <button
+          type="button"
+          style={{
+            padding: "4px 10px",
+            borderRadius: 6,
+            border: "1px solid",
+            fontSize: 12,
+            cursor: "pointer",
+            background: mode === "subir" ? "#2563eb" : "white",
+            color: mode === "subir" ? "white" : "#475569",
+            borderColor: mode === "subir" ? "#2563eb" : "#cbd5e1",
+          }}
+          onClick={() => { setMode("subir"); onChange(""); }}
+        >
+          📁 Subir Imagen
+        </button>
+      </div>
+
+      {mode === "dibujar" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <canvas
+            ref={canvasRef}
+            width={400}
+            height={150}
+            style={{ border: "1px solid #cbd5e1", background: "white", borderRadius: 8, cursor: "crosshair", touchAction: "none", width: "100%", height: 150 }}
+            onMouseDown={startDrawing}
+            onMouseMove={draw}
+            onMouseUp={stopDrawing}
+            onMouseLeave={stopDrawing}
+            onTouchStart={startDrawing}
+            onTouchMove={draw}
+            onTouchEnd={stopDrawing}
+          />
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <button type="button" style={{ padding: "3px 8px", borderRadius: 6, border: "1px solid #e2e8f0", background: "white", color: "#475569", fontSize: 12, cursor: "pointer" }} onClick={clearCanvas}>Limpiar Lienzo</button>
+          </div>
+        </div>
+      )}
+
+      {mode === "subir" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <input type="file" accept="image/*" onChange={handleFileUpload} style={{ fontSize: 13 }} />
+          <p style={{ margin: 0, fontSize: 11, color: "#64748b" }}>Formatos permitidos: PNG, JPG, JPEG.</p>
+        </div>
+      )}
+
+      {value && (
+        <div style={{ marginTop: 12, borderTop: "1px solid #e2e8f0", paddingTop: 10 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: "#64748b", display: "block", marginBottom: 6 }}>Vista previa de la firma:</span>
+          <img src={value} alt="Firma" style={{ maxHeight: 60, border: "1px solid #f1f5f9", background: "white", padding: 4, borderRadius: 4 }} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function CalibracionPage() {
@@ -387,6 +555,15 @@ export default function CalibracionPage() {
   const [formErrors, setFormErrors] = useState<Partial<Record<string, string>>>({});
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
+
+  // Aprobación Supervisor
+  const [approving, setApproving] = useState(false);
+  const [approveError, setApproveError] = useState("");
+  const [supervisorErrorId, setSupervisorErrorId] = useState("");
+  const [supervisorErrorFirma, setSupervisorErrorFirma] = useState("");
+  const [shouldScrollToSupervisor, setShouldScrollToSupervisor] = useState(false);
+  const supervisorFormRef = useRef<HTMLDivElement | null>(null);
+  const [currentUser, setCurrentUser] = useState<{ id: string; nombre: string; rol: number } | null>(null);
 
   // Lista
   const [registros, setRegistros] = useState<RegistroDoc[]>([]);
@@ -412,6 +589,7 @@ export default function CalibracionPage() {
   const [patronError, setPatronError] = useState("");
 
   // Autocomplete TAG
+  const [allEquipos, setAllEquipos] = useState<EquipoResult[]>([]);
   const [tagSuggestions, setTagSuggestions] = useState<EquipoResult[]>([]);
   const [tagLoading, setTagLoading] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -436,6 +614,15 @@ export default function CalibracionPage() {
 
   // ── Load patrones, tecnicos, supervisores once ──────────────────────────────
   useEffect(() => {
+    fetch("/api/auth/me")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.ok && d.user) {
+          setCurrentUser(d.user);
+        }
+      })
+      .catch(() => {});
+
     fetch("/api/patrones")
       .then((r) => r.json())
       .then((d: PatronDoc[]) => setPatrones(d))
@@ -456,21 +643,29 @@ export default function CalibracionPage() {
         setSupervisores(filtrados.length > 0 ? filtrados : d);
       })
       .catch(() => {});
+
+    fetch("/api/equipos?all=true&limit=2500")
+      .then((r) => r.json())
+      .then((d: EquipoResult[]) => setAllEquipos(d))
+      .catch(() => {});
   }, []);
 
   // ── TAG debounced autocomplete ───────────────────────────────────────────────
   const handleTagInput = (val: string) => {
     setForm((f) => ({ ...f, tag: val }));
     setShowSuggestions(true);
+
     if (tagDebounceRef.current) clearTimeout(tagDebounceRef.current);
-    if (val.length < 2) {
-      setTagSuggestions([]);
+
+    if (!val.trim()) {
+      setTagSuggestions(allEquipos);
       return;
     }
+
+    setTagLoading(true);
     tagDebounceRef.current = setTimeout(async () => {
-      setTagLoading(true);
       try {
-        const res = await fetch(`/api/equipos?area=3320&q=${encodeURIComponent(val)}`);
+        const res = await fetch(`/api/equipos?q=${encodeURIComponent(val)}&limit=150`);
         const data: EquipoResult[] = await res.json();
         setTagSuggestions(data);
       } catch {
@@ -478,7 +673,7 @@ export default function CalibracionPage() {
       } finally {
         setTagLoading(false);
       }
-    }, 300);
+    }, 280);
   };
 
   const selectTag = (eq: EquipoResult) => {
@@ -602,6 +797,9 @@ export default function CalibracionPage() {
       );
       if (filled.length === 0) errors.puntos = "Ingrese al menos un punto de calibración completo";
     }
+    if (s === 4) {
+      if (!form.tecnicoFirma) errors.tecnicoFirma = "La firma del técnico es obligatoria";
+    }
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -622,7 +820,7 @@ export default function CalibracionPage() {
         form.resultadoManual !== "" ? form.resultadoManual : autoResult ?? "RECHAZADO";
 
       const puntos = form.puntos
-        .filter((p) => p.lecturaPatron !== "" && p.lecturaInstrumento !== "" && p.tolerancia !== "")
+         .filter((p) => p.lecturaPatron !== "" && p.lecturaInstrumento !== "" && p.tolerancia !== "")
         .map((p) => {
           const error = Number(p.lecturaInstrumento) - Number(p.lecturaPatron);
           return {
@@ -669,6 +867,8 @@ export default function CalibracionPage() {
         observaciones: form.observaciones || undefined,
         otAsociada: form.otAsociada || undefined,
         stickerImpreso: form.stickerImpreso,
+        estado: "revision",
+        tecnicoFirma: form.tecnicoFirma,
       };
 
       const res = await fetch("/api/calibracion", {
@@ -727,7 +927,70 @@ export default function CalibracionPage() {
   // ── Open detalle ─────────────────────────────────────────────────────────────
   const openDetalle = (r: RegistroDoc) => {
     setDetalle(r);
+    setForm(f => ({
+      ...f,
+      supervisorId: r.supervisorId ?? "",
+      supervisorNombre: r.supervisorNombre ?? "",
+      supervisorFirma: r.supervisorFirma ?? "",
+    }));
     setView("detalle");
+  };
+
+  const openDetalleAndScroll = (r: RegistroDoc) => {
+    setShouldScrollToSupervisor(true);
+    openDetalle(r);
+  };
+
+  useEffect(() => {
+    if (view === "detalle" && shouldScrollToSupervisor) {
+      setShouldScrollToSupervisor(false);
+      setTimeout(() => {
+        supervisorFormRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 150);
+    }
+  }, [view, shouldScrollToSupervisor]);
+
+  const handleApproveBySupervisor = async () => {
+    setApproveError("");
+    setSupervisorErrorId("");
+    setSupervisorErrorFirma("");
+
+    let ok = true;
+    if (!form.supervisorId) {
+      setSupervisorErrorId("Por favor, seleccione un supervisor.");
+      ok = false;
+    }
+    if (!form.supervisorFirma) {
+      setSupervisorErrorFirma("La firma del supervisor es obligatoria.");
+      ok = false;
+    }
+    if (!ok || !detalle) return;
+
+    setApproving(true);
+    try {
+      const res = await fetch(`/api/calibracion/${detalle._id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          estado: "aprobado",
+          supervisorFirma: form.supervisorFirma,
+          supervisorId: form.supervisorId,
+          supervisorNombre: form.supervisorNombre,
+        }),
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || "Error al aprobar la calibración");
+
+      const updatedDoc = data.registro as RegistroDoc;
+      setDetalle(updatedDoc);
+      setRegistros((prev) =>
+        prev.map((r) => (r._id === updatedDoc._id ? updatedDoc : r))
+      );
+    } catch (err: unknown) {
+      setApproveError(err instanceof Error ? err.message : "Error al procesar la aprobación");
+    } finally {
+      setApproving(false);
+    }
   };
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -833,9 +1096,15 @@ export default function CalibracionPage() {
                         <span style={{ fontWeight: 700, fontSize: 13, color: "#0f2847" }}>
                           {r.numeroCertificado}
                         </span>
-                        <span style={S.badge(RESULTADO_COLOR[r.resultadoGeneral] ?? "#64748b")}>
-                          {r.resultadoGeneral}
-                        </span>
+                        {r.estado === "revision" ? (
+                          <span style={S.badge("#d97706")}>
+                            ⚠ EN REVISIÓN
+                          </span>
+                        ) : (
+                          <span style={S.badge(RESULTADO_COLOR[r.resultadoGeneral] ?? "#64748b")}>
+                            {r.resultadoGeneral}
+                          </span>
+                        )}
                         {r.stickerImpreso && (
                           <span style={S.badge("#0891b2")}>✓ Sticker</span>
                         )}
@@ -847,6 +1116,31 @@ export default function CalibracionPage() {
                       <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>
                         {r.tipoVariable} · {r.tecnicoNombre}
                       </div>
+                      {r.estado === "revision" && (
+                        <div style={{ marginTop: 10 }}>
+                          <button
+                            style={{
+                              background: "#fef3c7",
+                              color: "#d97706",
+                              border: "1px solid #fde68a",
+                              borderRadius: 6,
+                              padding: "5px 12px",
+                              fontSize: 12,
+                              fontWeight: 700,
+                              cursor: "pointer",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 6,
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openDetalleAndScroll(r);
+                            }}
+                          >
+                            ✍️ Firmar Aprobación
+                          </button>
+                        </div>
+                      )}
                     </div>
                     <div style={{ textAlign: "right", flexShrink: 0 }}>
                       <div style={{ fontSize: 12, color: "#64748b" }}>{fmtDate(r.fecha)}</div>
@@ -886,7 +1180,13 @@ export default function CalibracionPage() {
                     placeholder="Ej: PT-3320-01"
                     value={form.tag}
                     onChange={(e) => handleTagInput(e.target.value)}
-                    onFocus={() => form.tag.length >= 2 && setShowSuggestions(true)}
+                    onFocus={() => {
+                      setTagSuggestions(!form.tag.trim() ? allEquipos : allEquipos.filter(eq =>
+                        eq.tag.toLowerCase().includes(form.tag.toLowerCase()) ||
+                        eq.descripcion.toLowerCase().includes(form.tag.toLowerCase())
+                      ));
+                      setShowSuggestions(true);
+                    }}
                     autoComplete="off"
                   />
                   {formErrors.tag && <p style={S.err}>{formErrors.tag}</p>}
@@ -1363,11 +1663,36 @@ export default function CalibracionPage() {
               </div>
             )}
 
-            {/* Step 4 — Revisión */}
+            {/* Step 4 — Firma Técnico */}
             {step === 4 && (
               <div style={S.card}>
                 <h3 style={{ margin: "0 0 16px", fontSize: 14, fontWeight: 700, color: "#0f2847" }}>
-                  Paso 4 — Revisión final
+                  Paso 4 — Firma del Técnico
+                </h3>
+                <p style={{ margin: "0 0 16px", fontSize: 12, color: "#64748b" }}>
+                  Por favor, dibuje su firma digital o suba un archivo de imagen (PNG/JPG) para validar la calibración antes del envío.
+                </p>
+
+                <SignatureSelector
+                  value={form.tecnicoFirma}
+                  onChange={(val) => setForm(f => ({ ...f, tecnicoFirma: val }))}
+                  label="Firma del Técnico *"
+                />
+
+                {formErrors.tecnicoFirma && <p style={{ ...S.err, marginTop: 10 }}>{formErrors.tecnicoFirma}</p>}
+
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 10, marginTop: 20 }}>
+                  <button style={S.btnGhost} onClick={handlePrevStep}>← Anterior</button>
+                  <button style={S.btnPrimary} onClick={handleNextStep}>Siguiente →</button>
+                </div>
+              </div>
+            )}
+
+            {/* Step 5 — Revisión */}
+            {step === 5 && (
+              <div style={S.card}>
+                <h3 style={{ margin: "0 0 16px", fontSize: 14, fontWeight: 700, color: "#0f2847" }}>
+                  Paso 5 — Revisión final
                 </h3>
 
                 {/* Summary grid */}
@@ -1630,6 +1955,91 @@ export default function CalibracionPage() {
                 </tbody>
               </table>
             </div>
+
+            {/* Firmas de Validación */}
+            <div style={{ ...S.card, marginBottom: 12 }}>
+              <h4 style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 700, color: "#0f2847" }}>
+                Firmas de Validación
+              </h4>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+                {/* Técnico signature */}
+                <div style={{ border: "1px solid #f1f5f9", borderRadius: 8, padding: 12, background: "#f8fafc", textAlign: "center" }}>
+                  <div style={S.label}>Técnico Calibrador</div>
+                  <div style={{ fontSize: 13, color: "#1e293b", fontWeight: 600, marginBottom: 8 }}>{detalle.tecnicoNombre}</div>
+                  {detalle.tecnicoFirma ? (
+                    <img src={detalle.tecnicoFirma} alt="Firma Técnico" style={{ maxHeight: 70, maxWidth: "100%", objectFit: "contain", background: "white", border: "1px solid #e2e8f0", padding: 4, borderRadius: 4 }} />
+                  ) : (
+                    <div style={{ fontSize: 12, color: "#94a3b8", padding: "10px 0" }}>Sin firma digital</div>
+                  )}
+                </div>
+
+                {/* Supervisor signature */}
+                <div style={{ border: "1px solid #f1f5f9", borderRadius: 8, padding: 12, background: "#f8fafc", textAlign: "center" }}>
+                  <div style={S.label}>Supervisor Aprobador</div>
+                  <div style={{ fontSize: 13, color: "#1e293b", fontWeight: 600, marginBottom: 8 }}>{detalle.supervisorNombre || "—"}</div>
+                  {detalle.supervisorFirma ? (
+                    <img src={detalle.supervisorFirma} alt="Firma Supervisor" style={{ maxHeight: 70, maxWidth: "100%", objectFit: "contain", background: "white", border: "1px solid #e2e8f0", padding: 4, borderRadius: 4 }} />
+                  ) : (
+                    <div style={{ fontSize: 12, color: "#94a3b8", padding: "10px 0" }}>Pendiente de aprobación</div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Revisión y Aprobación del Supervisor */}
+            {detalle.estado === "revision" && (currentUser?.rol === 3 || currentUser?.rol === 1 || currentUser?.rol === 2) && (
+              <div ref={supervisorFormRef} style={{ ...S.card, border: "2px solid #f59e0b", background: "#fffbeb", marginBottom: 12 }}>
+                <h4 style={{ margin: "0 0 8px", fontSize: 14, fontWeight: 800, color: "#b45309", display: "flex", alignItems: "center", gap: 6 }}>
+                  ✍️ Revisión y Aprobación del Supervisor
+                </h4>
+                <p style={{ margin: "0 0 14px", fontSize: 12, color: "#78350f" }}>
+                  Como supervisor, seleccione su nombre, dibuje o suba su firma digital y apruebe esta calibración para cambiar el estado a <strong>APROBADO</strong>.
+                </p>
+
+                {/* Supervisor dropdown selection */}
+                <div style={{ marginBottom: 14 }}>
+                  <label style={{ ...S.label, color: "#78350f" }}>Seleccionar Supervisor *</label>
+                  <select
+                    style={S.select}
+                    value={form.supervisorId}
+                    onChange={(e) => {
+                      const opt = supervisores.find((u) => u._id === e.target.value);
+                      setForm((f) => ({ ...f, supervisorId: e.target.value, supervisorNombre: opt?.nombreCompleto ?? "" }));
+                    }}
+                  >
+                    <option value="">Seleccione un supervisor...</option>
+                    {supervisores.map((u) => (
+                      <option key={u._id} value={u._id}>{u.nombreCompleto}</option>
+                    ))}
+                  </select>
+                  {supervisorErrorId && <p style={S.err}>{supervisorErrorId}</p>}
+                </div>
+
+                {/* Signature canvas for Supervisor */}
+                <div style={{ marginBottom: 14 }}>
+                  <SignatureSelector
+                    value={form.supervisorFirma}
+                    onChange={(val) => setForm(f => ({ ...f, supervisorFirma: val }))}
+                    label="Firma del Supervisor *"
+                  />
+                  {supervisorErrorFirma && <p style={S.err}>{supervisorErrorFirma}</p>}
+                </div>
+
+                {approveError && (
+                  <p style={{ ...S.err, marginBottom: 12 }}>{approveError}</p>
+                )}
+
+                <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                  <button
+                    style={{ ...S.btnGreen, background: "#d97706", display: "inline-flex", alignItems: "center", gap: 6, opacity: approving ? 0.7 : 1 }}
+                    disabled={approving}
+                    onClick={handleApproveBySupervisor}
+                  >
+                    {approving ? "Procesando..." : "✍️ Firmar y Aprobar Calibración"}
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Footer */}
             <div style={S.card}>
