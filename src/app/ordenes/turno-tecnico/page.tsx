@@ -20,14 +20,32 @@ type ReporteDoc = {
   estado: string;
 };
 
-type OTItem = {
+// OT registrada (desde /api/ordenes)
+type OTRegistrada = {
   _id: string; numeroOT: string; fecha: string; turno: string; areaCodigo: string;
   estado: string; otJdeNumero?: string | null;
   tecnicos: { nombreCompleto: string }[];
   lineas: { tag: string; tipoOT: string; tiempoRealHrs?: number; descripcionEquipo?: string; sintoma?: string; resolucionAplicada?: string; descripcionTrabajo?: string }[];
 };
 
+// OT del plan semanal (desde /api/programacion-semanal)
+type OTPlan = {
+  id: string;           // "plan-{progId}-{otId}"
+  numeroOT: string; tipoOT: string; descripcion: string;
+  tag: string; descripcionEquipo?: string; hhTotal: number;
+  personalAsignado: string[]; grupo: string; dia: string;
+  estado: string; esGuardia: boolean;
+  ordenTrabajoId?: string; ordenTrabajoNum?: string;
+  areaCodigo: string; disciplina: string;
+};
+
+type AreaOpt = { codigo: string; nombre: string; superintendencia?: string };
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+const DIA_MAP = ["Do", "Lu", "Ma", "Mi", "Ju", "Vi", "Sa"] as const;
+const GRUPOS_DIURNO  = new Set(["G1","G2","G3","G4","Diurno"]);
+const GRUPOS_NOCTURNO = new Set(["Nocturno"]);
 
 function getFechaTurno() {
   const ahora = new Date();
@@ -38,6 +56,27 @@ function getFechaTurno() {
     return { fecha: ayer.toISOString().split("T")[0], turno: "Nocturno" as const };
   }
   return { fecha: ahora.toISOString().split("T")[0], turno: "Diurno" as const };
+}
+
+function getWeekYear(fechaStr: string) {
+  const d = new Date(fechaStr + "T12:00:00");
+  const dt = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const day = dt.getUTCDay() || 7;
+  dt.setUTCDate(dt.getUTCDate() + 4 - day);
+  const y = new Date(Date.UTC(dt.getUTCFullYear(), 0, 1));
+  const semana = Math.ceil((((dt.getTime() - y.getTime()) / 86400000) + 1) / 7);
+  return { semana, anio: dt.getUTCFullYear() };
+}
+
+function diaSemana(fechaStr: string): string {
+  const d = new Date(fechaStr + "T12:00:00");
+  return DIA_MAP[d.getDay()];
+}
+
+function disciplinaDeArea(areaCodigo: string): string {
+  if (areaCodigo === "3320") return "INSTRUMENTACIÓN";
+  if (areaCodigo === "3319" || areaCodigo === "3311") return "ELÉCTRICO";
+  return "MECÁNICO";
 }
 
 const TIPO_COLOR: Record<string, string> = { CMP: "#dc2626", CMR: "#d97706", PMP: "#2563eb", PMT: "#0891b2", PTJ: "#7c3aed" };
@@ -86,36 +125,56 @@ export default function ReporteTurnoTecnicoPage() {
   const { user } = useUser();
   const { fecha: shiftFecha, turno: shiftTurno } = getFechaTurno();
 
-  const [view, setView]     = useState<"lista" | "nuevo" | "detalle">("lista");
-  const [step, setStep]     = useState(1);
+  const [view, setView]       = useState<"lista" | "nuevo" | "detalle">("lista");
+  const [step, setStep]       = useState(1);
   const [detalle, setDetalle] = useState<ReporteDoc | null>(null);
 
-  const [reportes, setReportes]     = useState<ReporteDoc[]>([]);
-  const [otsDisponibles, setOts]    = useState<OTItem[]>([]);
+  const [reportes, setReportes]       = useState<ReporteDoc[]>([]);
+  const [otsRegistradas, setOtsReg]   = useState<OTRegistrada[]>([]);
+  const [otsPlan, setOtsPlan]         = useState<OTPlan[]>([]);
+  const [areas, setAreas]             = useState<AreaOpt[]>([]);
   const [loadingReportes, setLoadingRep] = useState(true);
-  const [loadingOTs, setLoadingOTs] = useState(false);
+  const [loadingOTs, setLoadingOTs]   = useState(false);
 
-  const [form, setForm] = useState({
-    fecha: shiftFecha,
-    turno: shiftTurno as TurnoTipo,
+  const emptyForm = () => ({
+    fecha: shiftFecha, turno: shiftTurno as TurnoTipo,
+    areaCodigo: (user?.areas?.[0] ?? ""),
     otIds: [] as string[],
+    otsPlanIds: [] as string[],
     otsCriticas: [] as string[],
     otsPendientes: [] as string[],
     notasOTs: {} as Record<string, string>,
     novedades: [] as Novedad[],
   });
 
+  const [form, setForm] = useState(emptyForm);
   const [novInput, setNovInput] = useState<{ prioridad: "URGENTE" | "ATENCION" | "INFORMACION"; tag: string; descripcion: string }>({ prioridad: "INFORMACION", tag: "", descripcion: "" });
   const [filtroTexto, setFiltroTexto] = useState("");
   const [submitting, setSubmitting]   = useState(false);
   const [submitErr, setSubmitErr]     = useState("");
+
+  // Área efectiva para cargar OTs
+  const areaEfectiva = form.areaCodigo || (user?.areas?.[0] ?? "");
+  const disciplina = areaEfectiva ? disciplinaDeArea(areaEfectiva) : "";
+
+  // ─── Load áreas (para selector admin/sup) ───────────────────────────────────
+
+  useEffect(() => {
+    fetch("/api/areas").then(r => r.json()).then(setAreas).catch(() => {});
+  }, []);
+
+  // Preseleccionar área si el usuario tiene solo una
+  useEffect(() => {
+    if (user?.areas?.length === 1 && !form.areaCodigo) {
+      setForm(f => ({ ...f, areaCodigo: user.areas[0] }));
+    }
+  }, [user, form.areaCodigo]);
 
   // ─── Load reportes ──────────────────────────────────────────────────────────
 
   const loadReportes = useCallback(async () => {
     setLoadingRep(true);
     const params = new URLSearchParams({ tipo: "tecnico", limit: "60" });
-    // técnicos solo ven sus propios reportes
     if (user?.rol === 4) params.set("supervisorId", user.id);
     const data = await fetch(`/api/reportes-turno?${params}`).then(r => r.json()).catch(() => []);
     setReportes(Array.isArray(data) ? data : []);
@@ -124,24 +183,73 @@ export default function ReporteTurnoTecnicoPage() {
 
   useEffect(() => { if (user) loadReportes(); }, [user, loadReportes]);
 
-  // ─── Load OTs del turno seleccionado ────────────────────────────────────────
+  // ─── Load OTs del turno (registradas + plan) ────────────────────────────────
 
   const loadOTs = useCallback(async () => {
     if (!form.fecha || !user) return;
     setLoadingOTs(true);
-    // OTs del día/turno filtradas por área del usuario
-    const userAreas: string[] = user.areas ?? [];
-    const params = new URLSearchParams({ fecha: form.fecha, turno: form.turno, limit: "100" });
-    if (userAreas.length === 1) params.set("area", userAreas[0]);
-    const data = await fetch(`/api/ordenes?${params}`).then(r => r.json()).catch(() => []);
+    setOtsReg([]);
+    setOtsPlan([]);
+
+    const area = areaEfectiva;
+    const { semana, anio } = getWeekYear(form.fecha);
+    const diaOT = diaSemana(form.fecha);
+    const gruposValidos = form.turno === "Nocturno" ? GRUPOS_NOCTURNO : GRUPOS_DIURNO;
+
+    // ── 1. OTs registradas ──────────────────────────────────────────────────
+    const paramsOrd = new URLSearchParams({ fecha: form.fecha, turno: form.turno, limit: "100" });
+    if (area) paramsOrd.set("area", area);
+    const dataOrd: OTRegistrada[] = await fetch(`/api/ordenes?${paramsOrd}`).then(r => r.json()).catch(() => []);
     // Filtrar por nombre del técnico si es rol=4
-    const ots: OTItem[] = Array.isArray(data) ? data : [];
-    const filtradas = user.rol === 4
-      ? ots.filter(o => o.tecnicos.some(t => t.nombreCompleto.toLowerCase().includes(user.nombre.toLowerCase())))
-      : ots;
-    setOts(filtradas);
+    const registradas = user.rol === 4
+      ? (Array.isArray(dataOrd) ? dataOrd : []).filter(o =>
+          o.tecnicos.some(t => t.nombreCompleto.toLowerCase().includes(user.nombre.toLowerCase()))
+        )
+      : (Array.isArray(dataOrd) ? dataOrd : []);
+    setOtsReg(registradas);
+
+    // ── 2. OTs del plan semanal (incluyendo bitácora OPEPLANT) ──────────────
+    const paramsPlan = new URLSearchParams({ semana: String(semana), anio: String(anio), limit: "20" });
+    if (area) paramsPlan.set("areaCodigo", area);
+    const dataPlanes = await fetch(`/api/programacion-semanal?${paramsPlan}`).then(r => r.json()).catch(() => []);
+
+    const planes: OTPlan[] = [];
+    for (const prog of (Array.isArray(dataPlanes) ? dataPlanes : [])) {
+      const disc = prog.disciplina ?? "";
+      for (const ot of (prog.otsProgramadas ?? [])) {
+        // Filtrar por día y grupo/turno
+        if (ot.dia !== diaOT) continue;
+        if (!gruposValidos.has(ot.grupo)) continue;
+        // Si es técnico, filtrar por nombre en personalAsignado
+        if (user.rol === 4) {
+          const asignado = (ot.personalAsignado ?? []).some((n: string) =>
+            n.toLowerCase().includes(user.nombre.toLowerCase())
+          );
+          if (!asignado && !ot.esGuardia) continue;
+        }
+        planes.push({
+          id: `plan-${prog._id}-${ot.id ?? ot.numeroOT}`,
+          numeroOT: ot.numeroOT,
+          tipoOT: ot.tipoOT ?? "",
+          descripcion: ot.descripcion ?? "",
+          tag: ot.tag ?? "",
+          descripcionEquipo: ot.descripcionEquipo,
+          hhTotal: ot.hhTotal ?? 0,
+          personalAsignado: ot.personalAsignado ?? [],
+          grupo: ot.grupo,
+          dia: ot.dia,
+          estado: ot.estado ?? "no_iniciada",
+          esGuardia: !!ot.esGuardia,
+          ordenTrabajoId: ot.ordenTrabajoId,
+          ordenTrabajoNum: ot.ordenTrabajoNum,
+          areaCodigo: prog.areaCodigo ?? area,
+          disciplina: disc,
+        });
+      }
+    }
+    setOtsPlan(planes);
     setLoadingOTs(false);
-  }, [form.fecha, form.turno, user]);
+  }, [form.fecha, form.turno, areaEfectiva, user]);
 
   useEffect(() => {
     if (view === "nuevo" && step === 2) loadOTs();
@@ -149,8 +257,12 @@ export default function ReporteTurnoTecnicoPage() {
 
   function patchForm(p: Partial<typeof form>) { setForm(f => ({ ...f, ...p })); }
 
-  function toggleOT(id: string) {
-    patchForm({ otIds: form.otIds.includes(id) ? form.otIds.filter(x => x !== id) : [...form.otIds, id] });
+  function toggleOT(id: string, isPlan: boolean) {
+    if (isPlan) {
+      patchForm({ otsPlanIds: form.otsPlanIds.includes(id) ? form.otsPlanIds.filter(x => x !== id) : [...form.otsPlanIds, id] });
+    } else {
+      patchForm({ otIds: form.otIds.includes(id) ? form.otIds.filter(x => x !== id) : [...form.otIds, id] });
+    }
   }
   function toggleCritica(id: string) {
     patchForm({ otsCriticas: form.otsCriticas.includes(id) ? form.otsCriticas.filter(x => x !== id) : [...form.otsCriticas, id] });
@@ -172,18 +284,32 @@ export default function ReporteTurnoTecnicoPage() {
     setSubmitting(true); setSubmitErr("");
     try {
       const notasArr = Object.entries(form.notasOTs).filter(([, v]) => v.trim()).map(([otId, nota]) => ({ otId, nota }));
+      // OTs del plan seleccionadas para incluir en PDF
+      const planSeleccionadas = otsPlan.filter(o => form.otsPlanIds.includes(o.id));
       const payload = {
         tipo: "tecnico",
         turno: form.turno,
         fecha: form.fecha,
         supervisorId: user.id,
-        supervisorNombre: user.nombre,
+        supervisorNombre: `${user.nombre}${disciplina ? " — " + disciplina : ""}`,
         otIds: form.otIds,
-        otsCriticas: form.otsCriticas,
+        otsCriticas: [...form.otsCriticas],
         otsPendientesSiguienteTurno: form.otsPendientes,
         notasOTs: notasArr,
         recomendaciones: form.novedades,
-        otsPlanData: [],
+        // Guardar OTs del plan para el PDF (mismo campo que usa el reporte supervisor)
+        otsPlanData: planSeleccionadas.map(o => ({
+          otId: o.id,
+          numeroOT: o.numeroOT,
+          tag: o.tag,
+          disciplina: o.disciplina,
+          tipoOT: o.tipoOT,
+          descripcion: o.descripcion,
+          tecnicos: o.personalAsignado,
+          hhTotal: o.hhTotal,
+          estado: o.estado,
+          esGuardia: o.esGuardia,
+        })),
       };
       const res = await fetch("/api/reportes-turno", {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -191,7 +317,6 @@ export default function ReporteTurnoTecnicoPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Error al guardar");
-      // Ir directamente a imprimir
       router.push(`/ordenes/turno-tecnico/${data.reporte._id}/imprimir`);
     } catch (e: unknown) {
       setSubmitErr(e instanceof Error ? e.message : "Error desconocido");
@@ -199,14 +324,24 @@ export default function ReporteTurnoTecnicoPage() {
     }
   }
 
-  // ─── OTs filtradas ──────────────────────────────────────────────────────────
+  // ─── Filtro búsqueda ────────────────────────────────────────────────────────
 
-  const otsFiltradas = otsDisponibles.filter(o => {
-    if (!filtroTexto) return true;
-    const q = filtroTexto.toLowerCase();
-    return o.numeroOT.toLowerCase().includes(q)
-      || o.lineas.some(l => l.tag.toLowerCase().includes(q) || (l.descripcionEquipo ?? "").toLowerCase().includes(q));
-  });
+  function matchFilter(texto: string, campos: (string | undefined)[]) {
+    if (!texto) return true;
+    const q = texto.toLowerCase();
+    return campos.some(c => (c ?? "").toLowerCase().includes(q));
+  }
+
+  const otsRegFiltradas = otsRegistradas.filter(o =>
+    matchFilter(filtroTexto, [o.numeroOT, o.otJdeNumero ?? "", ...o.lineas.map(l => l.tag + " " + (l.descripcionEquipo ?? ""))])
+  );
+  const otsPlanFiltradas = otsPlan.filter(o =>
+    matchFilter(filtroTexto, [o.numeroOT, o.tag, o.descripcion])
+  );
+  const bitacora = otsPlanFiltradas.filter(o => o.esGuardia);
+  const planNormal = otsPlanFiltradas.filter(o => !o.esGuardia);
+
+  const totalSeleccionadas = form.otIds.length + form.otsPlanIds.length;
 
   // ─── Render ─────────────────────────────────────────────────────────────────
 
@@ -222,7 +357,7 @@ export default function ReporteTurnoTecnicoPage() {
         {/* ══ VISTA LISTA ══════════════════════════════════════════════════════ */}
         {view === "lista" && (
           <>
-            <button onClick={() => { setView("nuevo"); setStep(1); patchForm({ fecha: shiftFecha, turno: shiftTurno, otIds: [], otsCriticas: [], otsPendientes: [], notasOTs: {}, novedades: [] }); }}
+            <button onClick={() => { setView("nuevo"); setStep(1); setForm(emptyForm()); }}
               style={{ ...S.btnPrimary, marginBottom: 16, display: "block" }}>
               + Nuevo reporte de turno
             </button>
@@ -244,7 +379,7 @@ export default function ReporteTurnoTecnicoPage() {
                         <span style={S.badge(ESTADO_COLOR[r.estado] ?? "#64748b")}>{r.estado}</span>
                       </div>
                       <div style={{ fontSize: 12, color: "#64748b" }}>
-                        {r.otIds.length} OTs · {r.recomendaciones.length} novedades
+                        {r.otIds.length} OTs registradas · {(r as unknown as { otsPlanData?: unknown[] }).otsPlanData?.length ?? 0} del plan · {r.recomendaciones.length} novedades
                       </div>
                     </div>
                     <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
@@ -321,13 +456,42 @@ export default function ReporteTurnoTecnicoPage() {
                     </div>
                   </div>
                 </div>
+
+                {/* Selector de área — visible para admin/sup o usuarios con múltiples áreas */}
+                {(user && (user.rol <= 2 || (user.areas?.length ?? 0) > 1)) ? (
+                  <div style={{ marginBottom: 14 }}>
+                    <label style={S.label}>Área / Disciplina</label>
+                    <select value={form.areaCodigo} onChange={e => patchForm({ areaCodigo: e.target.value })}
+                      style={{ ...S.input, cursor: "pointer" }}>
+                      <option value="">— Seleccionar área —</option>
+                      {areas.map(a => (
+                        <option key={a.codigo} value={a.codigo}>
+                          {a.codigo} — {a.nombre} ({disciplinaDeArea(a.codigo)})
+                        </option>
+                      ))}
+                    </select>
+                    {form.areaCodigo && (
+                      <p style={{ fontSize: 12, color: "#2563eb", marginTop: 4, fontWeight: 600 }}>
+                        Disciplina: {disciplinaDeArea(form.areaCodigo)}
+                      </p>
+                    )}
+                  </div>
+                ) : null}
+
+                {/* Info técnico */}
                 <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 14px" }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 4 }}>Técnico responsable</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", letterSpacing: "0.06em", textTransform: "uppercase" as const, marginBottom: 4 }}>Técnico responsable</div>
                   <div style={{ fontSize: 14, fontWeight: 700, color: "#0f2847" }}>{user?.nombre}</div>
-                  <div style={{ fontSize: 12, color: "#64748b" }}>Sesión activa · {(user?.areas ?? []).join(", ")}</div>
+                  <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>
+                    {disciplina ? `${disciplina} · ` : ""}{areaEfectiva || "Sin área"}
+                  </div>
                 </div>
+
                 <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
-                  <button onClick={() => setStep(2)} style={S.btnPrimary}>Continuar → OTs</button>
+                  <button onClick={() => setStep(2)} style={S.btnPrimary}
+                    disabled={!!(user && user.rol <= 2 && !form.areaCodigo)}>
+                    Continuar → OTs
+                  </button>
                 </div>
               </div>
             )}
@@ -335,72 +499,163 @@ export default function ReporteTurnoTecnicoPage() {
             {/* ── Step 2: OTs del turno ── */}
             {step === 2 && (
               <div style={S.card}>
-                <div style={{ fontWeight: 700, fontSize: 14, color: "#0f2847", marginBottom: 6 }}>OTs realizadas en el turno</div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: "#0f2847" }}>OTs realizadas en el turno</div>
+                  {totalSeleccionadas > 0 && (
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "#2563eb", background: "#eff6ff", borderRadius: 20, padding: "3px 10px" }}>
+                      {totalSeleccionadas} seleccionadas
+                    </span>
+                  )}
+                </div>
                 <p style={{ fontSize: 12, color: "#64748b", marginBottom: 14 }}>
-                  Selecciona las OTs que ejecutaste en este turno ({form.turno} · {form.fecha}).
+                  {form.turno} · {form.fecha} · {disciplina || areaEfectiva}
                 </p>
 
-                {/* Filtro */}
                 <input value={filtroTexto} onChange={e => setFiltroTexto(e.target.value)}
-                  placeholder="Filtrar por OT, TAG o equipo…" style={{ ...S.input, marginBottom: 12, fontSize: 13 }} />
+                  placeholder="Filtrar por OT, TAG o descripción…" style={{ ...S.input, marginBottom: 14, fontSize: 13 }} />
 
                 {loadingOTs ? (
                   <div style={{ textAlign: "center", padding: 24, color: "#94a3b8" }}>Cargando OTs…</div>
-                ) : otsFiltradas.length === 0 ? (
+                ) : (otsRegFiltradas.length === 0 && otsPlanFiltradas.length === 0) ? (
                   <div style={{ textAlign: "center", padding: 24, color: "#94a3b8", fontSize: 13 }}>
-                    Sin OTs registradas para este turno.<br />
-                    <span style={{ fontSize: 12 }}>Las OTs del turno se cargan desde el Registro de OT.</span>
+                    Sin OTs para este turno. Puedes continuar sin seleccionar ninguna.
                   </div>
                 ) : (
-                  otsFiltradas.map(o => {
-                    const sel = form.otIds.includes(o._id);
-                    const linea = o.lineas[0];
-                    const tipoColor = TIPO_COLOR[linea?.tipoOT ?? ""] ?? "#64748b";
-                    return (
-                      <div key={o._id} style={{ border: sel ? "2px solid #2563eb" : "1px solid #e2e8f0", borderRadius: 10, padding: "10px 12px", marginBottom: 8, background: sel ? "#f0f7ff" : "white", cursor: "pointer" }}
-                        onClick={() => toggleOT(o._id)}>
-                        <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-                          <input type="checkbox" checked={sel} onChange={() => toggleOT(o._id)} style={{ marginTop: 3, accentColor: "#2563eb", width: 16, height: 16 }} onClick={e => e.stopPropagation()} />
-                          <div style={{ flex: 1 }}>
-                            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 3 }}>
-                              <span style={S.badge(tipoColor)}>{linea?.tipoOT ?? "—"}</span>
-                              <span style={{ fontWeight: 700, fontSize: 13 }}>#{o.numeroOT}</span>
-                              {o.otJdeNumero && <span style={{ fontFamily: "monospace", fontSize: 12, color: "#64748b" }}>JDE: {o.otJdeNumero}</span>}
-                              <span style={{ fontFamily: "monospace", fontSize: 12, color: "#1d4ed8" }}>{linea?.tag}</span>
-                            </div>
-                            <p style={{ fontSize: 12, color: "#475569", marginBottom: sel ? 6 : 0 }}>
-                              {linea?.descripcionEquipo ?? linea?.sintoma ?? linea?.descripcionTrabajo ?? "—"}
-                            </p>
-                            {/* Opciones adicionales cuando está seleccionada */}
-                            {sel && (
-                              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginTop: 4 }}>
-                                <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", fontSize: 12 }} onClick={e => e.stopPropagation()}>
-                                  <input type="checkbox" checked={form.otsCriticas.includes(o._id)} onChange={() => toggleCritica(o._id)} style={{ accentColor: "#dc2626" }} />
-                                  <span style={{ color: "#dc2626", fontWeight: 600 }}>⚠ Crítica</span>
-                                </label>
-                                <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", fontSize: 12 }} onClick={e => e.stopPropagation()}>
-                                  <input type="checkbox" checked={form.otsPendientes.includes(o._id)} onChange={() => togglePendiente(o._id)} style={{ accentColor: "#d97706" }} />
-                                  <span style={{ color: "#d97706", fontWeight: 600 }}>→ Pasa al siguiente turno</span>
-                                </label>
-                              </div>
-                            )}
-                            {sel && (
-                              <div style={{ marginTop: 6 }} onClick={e => e.stopPropagation()}>
-                                <input
-                                  value={form.notasOTs[o._id] ?? ""}
-                                  onChange={e => patchForm({ notasOTs: { ...form.notasOTs, [o._id]: e.target.value } })}
-                                  placeholder="Nota sobre esta OT (opcional)…"
-                                  style={{ ...S.input, fontSize: 12 }} />
-                              </div>
-                            )}
-                          </div>
-                          {linea?.tiempoRealHrs && (
-                            <span style={{ fontSize: 11, color: "#16a34a", fontWeight: 700, flexShrink: 0 }}>{linea.tiempoRealHrs}h</span>
-                          )}
+                  <>
+                    {/* ── OTs del plan semanal (normal) ── */}
+                    {planNormal.length > 0 && (
+                      <>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", letterSpacing: "0.06em", textTransform: "uppercase" as const, marginBottom: 8 }}>
+                          Plan Semanal — {form.turno} ({planNormal.length})
                         </div>
-                      </div>
-                    );
-                  })
+                        {planNormal.map(o => {
+                          const selId = o.id;
+                          const sel = form.otsPlanIds.includes(selId);
+                          const tipoColor = TIPO_COLOR[o.tipoOT] ?? "#64748b";
+                          return (
+                            <div key={o.id} style={{ border: sel ? "2px solid #2563eb" : "1px solid #e2e8f0", borderRadius: 10, padding: "10px 12px", marginBottom: 8, background: sel ? "#f0f7ff" : "white", cursor: "pointer" }}
+                              onClick={() => toggleOT(selId, true)}>
+                              <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                                <input type="checkbox" checked={sel} onChange={() => toggleOT(selId, true)} style={{ marginTop: 3, accentColor: "#2563eb", width: 16, height: 16 }} onClick={e => e.stopPropagation()} />
+                                <div style={{ flex: 1 }}>
+                                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" as const, alignItems: "center", marginBottom: 3 }}>
+                                    <span style={S.badge(tipoColor)}>{o.tipoOT}</span>
+                                    <span style={{ fontWeight: 700, fontSize: 13, fontFamily: "monospace" }}>{o.numeroOT}</span>
+                                    <span style={{ fontFamily: "monospace", fontSize: 12, color: "#1d4ed8" }}>{o.tag}</span>
+                                    {o.hhTotal > 0 && <span style={{ fontSize: 11, color: "#16a34a", fontWeight: 700 }}>{o.hhTotal}h</span>}
+                                  </div>
+                                  <p style={{ fontSize: 12, color: "#475569" }}>{o.descripcion}</p>
+                                  {o.personalAsignado.length > 0 && (
+                                    <p style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>👤 {o.personalAsignado.join(", ")}</p>
+                                  )}
+                                  {sel && (
+                                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" as const, marginTop: 6 }} onClick={e => e.stopPropagation()}>
+                                      <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", fontSize: 12 }}>
+                                        <input type="checkbox" checked={form.otsCriticas.includes(selId)} onChange={() => toggleCritica(selId)} style={{ accentColor: "#dc2626" }} />
+                                        <span style={{ color: "#dc2626", fontWeight: 600 }}>⚠ Crítica</span>
+                                      </label>
+                                      <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", fontSize: 12 }}>
+                                        <input type="checkbox" checked={form.otsPendientes.includes(selId)} onChange={() => togglePendiente(selId)} style={{ accentColor: "#d97706" }} />
+                                        <span style={{ color: "#d97706", fontWeight: 600 }}>→ Pasa al siguiente turno</span>
+                                      </label>
+                                    </div>
+                                  )}
+                                  {sel && (
+                                    <div style={{ marginTop: 6 }} onClick={e => e.stopPropagation()}>
+                                      <input value={form.notasOTs[selId] ?? ""} onChange={e => patchForm({ notasOTs: { ...form.notasOTs, [selId]: e.target.value } })}
+                                        placeholder="Nota sobre esta OT (opcional)…" style={{ ...S.input, fontSize: 12 }} />
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </>
+                    )}
+
+                    {/* ── Bitácora (OTs OPEPLANT/guardia) ── */}
+                    {bitacora.length > 0 && (
+                      <>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: "#d97706", letterSpacing: "0.06em", textTransform: "uppercase" as const, marginBottom: 8, marginTop: planNormal.length > 0 ? 12 : 0 }}>
+                          Bitácora de Guardia — OPEPLANT ({bitacora.length})
+                        </div>
+                        {bitacora.map(o => {
+                          const selId = o.id;
+                          const sel = form.otsPlanIds.includes(selId);
+                          return (
+                            <div key={o.id} style={{ border: sel ? "2px solid #d97706" : "1px solid #fed7aa", borderRadius: 10, padding: "10px 12px", marginBottom: 8, background: sel ? "#fffbeb" : "white", cursor: "pointer" }}
+                              onClick={() => toggleOT(selId, true)}>
+                              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                                <input type="checkbox" checked={sel} onChange={() => toggleOT(selId, true)} style={{ accentColor: "#d97706", width: 16, height: 16 }} onClick={e => e.stopPropagation()} />
+                                <div style={{ flex: 1 }}>
+                                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" as const, alignItems: "center" }}>
+                                    <span style={{ fontSize: 10, fontWeight: 700, background: "#fef3c7", color: "#92400e", border: "1px solid #fde68a", borderRadius: 5, padding: "2px 7px" }}>🔄 OPEPLANT</span>
+                                    <span style={{ fontWeight: 700, fontSize: 13, fontFamily: "monospace" }}>{o.numeroOT}</span>
+                                    {o.ordenTrabajoNum && <span style={{ fontSize: 11, color: "#16a34a", fontWeight: 600 }}>OT #{o.ordenTrabajoNum}</span>}
+                                  </div>
+                                  <p style={{ fontSize: 12, color: "#475569", marginTop: 2 }}>{o.descripcion || "Guardia de turno"}</p>
+                                </div>
+                                {o.hhTotal > 0 && <span style={{ fontSize: 11, color: "#16a34a", fontWeight: 700, flexShrink: 0 }}>{o.hhTotal}h</span>}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </>
+                    )}
+
+                    {/* ── OTs registradas del día ── */}
+                    {otsRegFiltradas.length > 0 && (
+                      <>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", letterSpacing: "0.06em", textTransform: "uppercase" as const, marginBottom: 8, marginTop: (planNormal.length > 0 || bitacora.length > 0) ? 12 : 0 }}>
+                          OTs registradas en sistema ({otsRegFiltradas.length})
+                        </div>
+                        {otsRegFiltradas.map(o => {
+                          const sel = form.otIds.includes(o._id);
+                          const linea = o.lineas[0];
+                          const tipoColor = TIPO_COLOR[linea?.tipoOT ?? ""] ?? "#64748b";
+                          return (
+                            <div key={o._id} style={{ border: sel ? "2px solid #16a34a" : "1px solid #e2e8f0", borderRadius: 10, padding: "10px 12px", marginBottom: 8, background: sel ? "#f0fdf4" : "white", cursor: "pointer" }}
+                              onClick={() => toggleOT(o._id, false)}>
+                              <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                                <input type="checkbox" checked={sel} onChange={() => toggleOT(o._id, false)} style={{ marginTop: 3, accentColor: "#16a34a", width: 16, height: 16 }} onClick={e => e.stopPropagation()} />
+                                <div style={{ flex: 1 }}>
+                                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" as const, alignItems: "center", marginBottom: 3 }}>
+                                    <span style={S.badge(tipoColor)}>{linea?.tipoOT ?? "—"}</span>
+                                    <span style={{ fontWeight: 700, fontSize: 13 }}>#{o.numeroOT}</span>
+                                    {o.otJdeNumero && <span style={{ fontFamily: "monospace", fontSize: 11, color: "#64748b" }}>JDE: {o.otJdeNumero}</span>}
+                                    <span style={{ fontFamily: "monospace", fontSize: 12, color: "#1d4ed8" }}>{linea?.tag}</span>
+                                    {linea?.tiempoRealHrs && <span style={{ fontSize: 11, color: "#16a34a", fontWeight: 700 }}>{linea.tiempoRealHrs}h</span>}
+                                  </div>
+                                  <p style={{ fontSize: 12, color: "#475569" }}>
+                                    {linea?.descripcionEquipo ?? linea?.sintoma ?? linea?.descripcionTrabajo ?? "—"}
+                                  </p>
+                                  {sel && (
+                                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" as const, marginTop: 6 }} onClick={e => e.stopPropagation()}>
+                                      <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", fontSize: 12 }}>
+                                        <input type="checkbox" checked={form.otsCriticas.includes(o._id)} onChange={() => toggleCritica(o._id)} style={{ accentColor: "#dc2626" }} />
+                                        <span style={{ color: "#dc2626", fontWeight: 600 }}>⚠ Crítica</span>
+                                      </label>
+                                      <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", fontSize: 12 }}>
+                                        <input type="checkbox" checked={form.otsPendientes.includes(o._id)} onChange={() => togglePendiente(o._id)} style={{ accentColor: "#d97706" }} />
+                                        <span style={{ color: "#d97706", fontWeight: 600 }}>→ Pasa al siguiente turno</span>
+                                      </label>
+                                    </div>
+                                  )}
+                                  {sel && (
+                                    <div style={{ marginTop: 6 }} onClick={e => e.stopPropagation()}>
+                                      <input value={form.notasOTs[o._id] ?? ""} onChange={e => patchForm({ notasOTs: { ...form.notasOTs, [o._id]: e.target.value } })}
+                                        placeholder="Nota sobre esta OT (opcional)…" style={{ ...S.input, fontSize: 12 }} />
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </>
+                    )}
+                  </>
                 )}
 
                 <div style={{ display: "flex", justifyContent: "space-between", marginTop: 12 }}>
@@ -418,7 +673,6 @@ export default function ReporteTurnoTecnicoPage() {
                   Registra alertas, observaciones o pendientes importantes para el siguiente turno.
                 </p>
 
-                {/* Novedades ya agregadas */}
                 {form.novedades.length > 0 && (
                   <div style={{ marginBottom: 14 }}>
                     {form.novedades.map((n, i) => (
@@ -435,7 +689,6 @@ export default function ReporteTurnoTecnicoPage() {
                   </div>
                 )}
 
-                {/* Formulario nueva novedad */}
                 <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: "12px 14px", marginBottom: 14 }}>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 12px", marginBottom: 8 }}>
                     <div>
@@ -481,23 +734,10 @@ export default function ReporteTurnoTecnicoPage() {
                   <div><span style={S.label}>Técnico</span><p style={{ fontSize: 14 }}>{user?.nombre}</p></div>
                   <div><span style={S.label}>Turno</span><p style={{ fontSize: 14 }}>{form.turno}</p></div>
                   <div><span style={S.label}>Fecha</span><p style={{ fontSize: 14 }}>{form.fecha}</p></div>
-                  <div><span style={S.label}>OTs seleccionadas</span><p style={{ fontSize: 14, fontWeight: 700, color: "#2563eb" }}>{form.otIds.length}</p></div>
+                  <div><span style={S.label}>Disciplina / Área</span><p style={{ fontSize: 14, color: "#2563eb", fontWeight: 700 }}>{disciplina || areaEfectiva}</p></div>
+                  <div><span style={S.label}>OTs plan seleccionadas</span><p style={{ fontSize: 14, fontWeight: 700, color: "#2563eb" }}>{form.otsPlanIds.length}</p></div>
+                  <div><span style={S.label}>OTs registradas</span><p style={{ fontSize: 14, fontWeight: 700, color: "#16a34a" }}>{form.otIds.length}</p></div>
                 </div>
-
-                {form.otIds.length > 0 && (
-                  <div style={{ marginBottom: 14 }}>
-                    <span style={S.label}>OTs incluidas</span>
-                    {otsDisponibles.filter(o => form.otIds.includes(o._id)).map(o => (
-                      <div key={o._id} style={{ display: "flex", gap: 8, alignItems: "center", padding: "5px 8px", background: "#f8fafc", borderRadius: 6, marginBottom: 4, border: "1px solid #e2e8f0" }}>
-                        <span style={S.badge(TIPO_COLOR[o.lineas[0]?.tipoOT ?? ""] ?? "#64748b")}>{o.lineas[0]?.tipoOT}</span>
-                        <span style={{ fontWeight: 700, fontSize: 12 }}>#{o.numeroOT}</span>
-                        <span style={{ fontFamily: "monospace", fontSize: 11, color: "#1d4ed8" }}>{o.lineas[0]?.tag}</span>
-                        {form.otsCriticas.includes(o._id) && <span style={{ fontSize: 10, color: "#dc2626", fontWeight: 700 }}>⚠ CRÍTICA</span>}
-                        {form.otsPendientes.includes(o._id) && <span style={{ fontSize: 10, color: "#d97706", fontWeight: 700 }}>→ SIGUIENTE</span>}
-                      </div>
-                    ))}
-                  </div>
-                )}
 
                 {form.novedades.length > 0 && (
                   <div style={{ marginBottom: 16 }}>
@@ -513,7 +753,7 @@ export default function ReporteTurnoTecnicoPage() {
 
                 <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8, padding: "10px 14px", marginBottom: 16 }}>
                   <p style={{ fontSize: 13, color: "#166534" }}>
-                    Al guardar se generará el PDF del reporte de turno. No se requiere aprobación del supervisor — es solo para registro y descarga.
+                    Al guardar se generará el PDF del reporte de turno. No requiere aprobación del supervisor.
                   </p>
                 </div>
 
