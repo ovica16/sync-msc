@@ -328,7 +328,7 @@ export default function TurneroPage() {
                                 return (
                                   <div key={ot._id} style={{ background: "#fafafa", borderRadius: 10, border: "1px solid #e2e8f0", padding: "10px 14px", borderLeft: "3px solid #d97706" }}>
                                     <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
-                                      <span style={{ fontWeight: 800, fontSize: 13, fontFamily: "monospace", color: "#0f2847" }}>#{ot.numeroOT}</span>
+                                      <span style={{ fontWeight: 800, fontSize: 13, fontFamily: "monospace", color: "#0f2847" }}>{ot.otJdeNumero ? `OT ${ot.otJdeNumero}` : `#${ot.numeroOT}`}</span>
                                       <span style={S.badge(estadoColor)}>{ESTADO_LABEL[ot.estado] ?? ot.estado}</span>
                                       {ot.lineas.map((l, i) => (
                                         <span key={i} style={S.badge(TIPO_COLOR[l.tipoOT] ?? "#64748b")}>{l.tipoOT}</span>

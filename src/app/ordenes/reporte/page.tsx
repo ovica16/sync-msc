@@ -210,6 +210,9 @@ export default function ReporteOTPage() {
   const [editMode, setEditMode] = useState(false);
   const [editLineas, setEditLineas] = useState<Linea[]>([]);
   const [editOtJdeNumero, setEditOtJdeNumero] = useState("");
+  const [editTurno, setEditTurno] = useState("");
+  const [editTecnicos, setEditTecnicos] = useState<{ usuarioId: string; nombreCompleto: string }[]>([]);
+  const [usuariosDisponibles, setUsuariosDisponibles] = useState<{ _id: string; nombre: string }[]>([]);
   const [tareaInputs, setTareaInputs] = useState<string[]>([]);
   const [itemCheckInputs, setItemCheckInputs] = useState<string[]>([]);
 
@@ -270,6 +273,9 @@ export default function ReporteOTPage() {
     setTareaInputs(selected.lineas.map(() => ""));
     setItemCheckInputs(selected.lineas.map(() => ""));
     setEditOtJdeNumero(selected.otJdeNumero ?? "");
+    setEditTurno(selected.turno ?? "");
+    setEditTecnicos(selected.tecnicos.map(t => ({ usuarioId: t.usuarioId ?? "", nombreCompleto: t.nombreCompleto })));
+    fetch(`/api/usuarios?rol=4&area=${selected.areaCodigo}&all=true`).then(r => r.json()).then(setUsuariosDisponibles).catch(() => {});
     setEditMode(true);
   }
 
@@ -366,6 +372,8 @@ export default function ReporteOTPage() {
           lineas: editLineas,
           cambios,
           otJdeNumero: editOtJdeNumero.trim() || null,
+          turno: editTurno || undefined,
+          tecnicos: editTecnicos,
           usuarioId: user?.id ?? "sistema",
           nombreUsuario: user?.nombre ?? "Sistema",
         }),
@@ -707,11 +715,52 @@ export default function ReporteOTPage() {
             </div>
             <div>
               <span style={S.label}>Turno</span>
-              <p style={{ fontSize: 14, color: "#1e293b" }}>{ot.turno}</p>
+              {editMode ? (
+                <select
+                  value={editTurno}
+                  onChange={e => setEditTurno(e.target.value)}
+                  style={{ marginTop: 4, padding: "6px 10px", border: "1px solid #fcd34d", borderRadius: 6, fontSize: 14, background: "#fffbeb", width: "100%" }}
+                >
+                  {["Diurno", "Nocturno", "Parada de Planta", "Planta", "Otro"].map(t => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+              ) : (
+                <p style={{ fontSize: 14, color: "#1e293b" }}>{ot.turno}</p>
+              )}
             </div>
             <div style={{ gridColumn: "1 / -1" }}>
               <span style={S.label}>Técnico(s)</span>
-              <p style={{ fontSize: 14, color: "#1e293b" }}>{ot.tecnicos.map((t) => t.nombreCompleto).join(", ")}</p>
+              {editMode ? (
+                <div style={{ marginTop: 4, display: "flex", flexDirection: "column", gap: 6 }}>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {editTecnicos.map((t, i) => (
+                      <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "#dbeafe", color: "#1d4ed8", borderRadius: 6, padding: "3px 10px", fontSize: 13, fontWeight: 600 }}>
+                        {t.nombreCompleto}
+                        <button type="button" onClick={() => setEditTecnicos(prev => prev.filter((_, j) => j !== i))} style={{ background: "none", border: "none", cursor: "pointer", color: "#1d4ed8", fontWeight: 800, fontSize: 14, lineHeight: 1, padding: 0 }}>×</button>
+                      </span>
+                    ))}
+                  </div>
+                  <select
+                    defaultValue=""
+                    onChange={e => {
+                      const opt = e.target.options[e.target.selectedIndex];
+                      if (!opt.value) return;
+                      const ya = editTecnicos.some(t => t.usuarioId === opt.value || t.nombreCompleto === opt.text);
+                      if (!ya) setEditTecnicos(prev => [...prev, { usuarioId: opt.value, nombreCompleto: opt.text }]);
+                      e.target.value = "";
+                    }}
+                    style={{ padding: "6px 10px", border: "1px solid #fcd34d", borderRadius: 6, fontSize: 13, background: "#fffbeb", maxWidth: 300 }}
+                  >
+                    <option value="">+ Agregar técnico…</option>
+                    {usuariosDisponibles.filter(u => !editTecnicos.some(t => t.usuarioId === u._id)).map(u => (
+                      <option key={u._id} value={u._id}>{u.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <p style={{ fontSize: 14, color: "#1e293b" }}>{ot.tecnicos.map((t) => t.nombreCompleto).join(", ")}</p>
+              )}
             </div>
             <div style={{ gridColumn: "1 / -1" }}>
               <span style={S.label}>N° OT JDE / OPEPLANT</span>

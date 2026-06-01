@@ -79,11 +79,26 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   try {
     const { id } = await params;
     const body = await req.json();
-    const { estado, datosSupervision, cambio, cambios, lineas, registroDiario, usuarioId, nombreUsuario, otJdeNumero } = body;
+    const { estado, datosSupervision, cambio, cambios, lineas, tecnicos, turno, registroDiario, usuarioId, nombreUsuario, otJdeNumero } = body;
 
     const updateData: Record<string, unknown> = {};
     if (estado) updateData.estado = estado;
     if (otJdeNumero !== undefined) updateData.otJdeNumero = otJdeNumero || null;
+    if (turno) updateData.turno = turno;
+
+    // Actualizar técnicos: delete + recreate
+    if (Array.isArray(tecnicos)) {
+      await prisma.otTecnico.deleteMany({ where: { ordenTrabajoId: id } });
+      if (tecnicos.length > 0) {
+        await prisma.otTecnico.createMany({
+          data: tecnicos.map((t: { usuarioId?: string; nombreCompleto: string }) => ({
+            ordenTrabajoId: id,
+            usuarioId: t.usuarioId ?? null,
+            nombreCompleto: t.nombreCompleto,
+          })),
+        });
+      }
+    }
 
     if (datosSupervision) {
       if (datosSupervision.clasificacionRCM)    updateData.supClasificacionRCM    = datosSupervision.clasificacionRCM;
