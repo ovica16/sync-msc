@@ -4,13 +4,17 @@ type OTDisplay = {
   id: string; numeroOT: string; tag: string; tipoOT: string;
   descripcion: string; tecnicos: string[]; hhTotal: number;
   estado: string; critica: boolean; pendiente: boolean; nota: string;
+  esPlan?: boolean;
 };
 
 type Novedad = { prioridad: string; tag?: string; descripcion: string };
 
 type ReporteData = {
   _id: string; turno: string; fecha: string; tecnicoNombre: string;
-  resumenEjecutivo: { totalOTs: number; concluidas: number; pendientes: number; hhTotales: number };
+  resumenEjecutivo: {
+    totalOTs: number; concluidas: number; pendientes: number;
+    hhTotales: number; correctivos: number; preventivos: number;
+  };
   novedades: Novedad[];
 };
 
@@ -18,7 +22,7 @@ const PRIOR_COLOR: Record<string, string> = {
   URGENTE: "#dc2626", ATENCION: "#d97706", INFORMACION: "#2563eb",
 };
 const TIPO_COLOR: Record<string, string> = {
-  CMP: "#dc2626", CMR: "#d97706", PMP: "#2563eb", PMT: "#0891b2", PTJ: "#7c3aed",
+  CMP: "#dc2626", CMR: "#d97706", PMP: "#2563eb", PMT: "#0891b2", PTJ: "#7c3aed", PDM: "#7c3aed",
 };
 
 export default function PrintClientTecnico({
@@ -31,8 +35,12 @@ export default function PrintClientTecnico({
   const fechaStr = fecha.toLocaleDateString("es-BO", { day: "2-digit", month: "long", year: "numeric" });
   const res = reporte.resumenEjecutivo;
 
-  const criticas     = ots.filter(o => o.critica);
+  const criticas      = ots.filter(o => o.critica);
   const pendientesSig = ots.filter(o => o.pendiente);
+
+  // Separar OTs del plan y OTs registradas
+  const otsPlan       = ots.filter(o => o.esPlan);
+  const otsRegistradas = ots.filter(o => !o.esPlan);
 
   return (
     <>
@@ -54,10 +62,13 @@ export default function PrintClientTecnico({
         .kpi { flex: 1; border: 1px solid #000; padding: 4px; text-align: center; }
         .kpi-val { font-size: 14pt; font-weight: bold; }
         .kpi-lbl { font-size: 7pt; color: #555; }
-        .section-title { font-weight: bold; font-size: 9pt; background: #e8edf4; padding: 3px 6px; border: 1px solid #000; margin-top: 8px; }
+        .section-title { font-weight: bold; font-size: 9pt; background: #e8edf4; padding: 3px 6px; border: 1px solid #000; margin-top: 8px; margin-bottom: 3px; }
+        .plan-row td { background: #f8fafc !important; }
+        .plan-badge { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; border-radius: 3px; padding: 1px 5px; font-size: 7pt; font-weight: bold; }
+        .opeplant-badge { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; border-radius: 3px; padding: 1px 5px; font-size: 7pt; font-weight: bold; }
       `}</style>
 
-      {/* Botones de pantalla */}
+      {/* Botones pantalla */}
       <div className="no-print" style={{ position: "fixed", top: 12, right: 12, display: "flex", gap: 8, zIndex: 100 }}>
         <div style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 14px", fontSize: 12, color: "#475569", maxWidth: 260 }}>
           Presiona <b>Ctrl+P</b> → destino <b>&quot;Guardar como PDF&quot;</b>
@@ -89,7 +100,7 @@ export default function PrintClientTecnico({
                   <div>2.03.P01.F36</div>
                   <div>Revisión: 1</div>
                 </div>
-                <div style={{ borderTop: "1px solid #000", background: "#b8b8b8", textAlign: "center", padding: "5px 6px", fontSize: 9, fontWeight: "bold", letterSpacing: "0.06em" }}>
+                <div style={{ borderTop: "1px solid #000", background: "#b8b8b8", textAlign: "center", padding: "5px 6px", fontSize: 9, fontWeight: "bold" }}>
                   INTERNA
                 </div>
               </td>
@@ -101,10 +112,10 @@ export default function PrintClientTecnico({
         <table style={{ width: "100%", borderCollapse: "collapse", border: "1px solid #000", marginBottom: 6, fontSize: 8.5 }}>
           <tbody>
             <tr>
-              <td style={{ padding: "4px 7px", borderRight: "1px solid #000", width: "26%" }}><b>Gerencia:</b> Mantenimiento Planta</td>
-              <td style={{ padding: "4px 7px", borderRight: "1px solid #000", width: "30%" }}><b>Técnico / Turnero:</b> {reporte.tecnicoNombre}</td>
-              <td style={{ padding: "4px 7px", borderRight: "1px solid #000", width: "18%" }}><b>Turno:</b> {reporte.turno}</td>
-              <td style={{ padding: "4px 7px", width: "26%" }}><b>Fecha:</b> {fechaStr}</td>
+              <td style={{ padding: "4px 7px", borderRight: "1px solid #000", width: "22%" }}><b>Gerencia:</b> Mantenimiento Planta</td>
+              <td style={{ padding: "4px 7px", borderRight: "1px solid #000", width: "34%" }}><b>Técnico / Turnero:</b> {reporte.tecnicoNombre}</td>
+              <td style={{ padding: "4px 7px", borderRight: "1px solid #000", width: "16%" }}><b>Turno:</b> {reporte.turno}</td>
+              <td style={{ padding: "4px 7px", width: "28%" }}><b>Fecha:</b> {fechaStr}</td>
             </tr>
           </tbody>
         </table>
@@ -112,12 +123,12 @@ export default function PrintClientTecnico({
         {/* ── KPIs ── */}
         <div className="kpis">
           {[
-            { val: res.totalOTs,    lbl: "Total OTs",     color: "#1f3864" },
-            { val: res.concluidas,  lbl: "Completadas",   color: "#16a34a" },
-            { val: res.pendientes,  lbl: "Pasan a sgtte", color: "#d97706" },
-            { val: res.hhTotales,   lbl: "HH Totales",    color: "#2563eb" },
-            { val: ots.filter(o => o.tipoOT === "CMR" || o.tipoOT === "CMP").length, lbl: "Correctivos", color: "#dc2626" },
-            { val: ots.filter(o => o.tipoOT === "PMP" || o.tipoOT === "PMT").length, lbl: "Preventivos", color: "#0891b2" },
+            { val: res.totalOTs,     lbl: "Total OTs",      color: "#1f3864" },
+            { val: res.concluidas,   lbl: "Completadas",    color: "#16a34a" },
+            { val: res.pendientes,   lbl: "Pasan a sgtte",  color: "#d97706" },
+            { val: res.hhTotales,    lbl: "HH Totales",     color: "#2563eb" },
+            { val: res.correctivos,  lbl: "Correctivos",    color: "#dc2626" },
+            { val: res.preventivos,  lbl: "Preventivos",    color: "#0891b2" },
           ].map(k => (
             <div key={k.lbl} className="kpi">
               <div className="kpi-val" style={{ color: k.color }}>{k.val}</div>
@@ -134,21 +145,58 @@ export default function PrintClientTecnico({
               <th style={{ width: 55 }}>TIPO</th>
               <th style={{ width: 80 }}>EQUIPO TAG</th>
               <th style={{ width: 28 }}>HRS</th>
-              <th style={{ width: 55 }}>OT #</th>
+              <th style={{ width: 60 }}>OT #</th>
               <th>DESCRIPCIÓN DEL TRABAJO</th>
               <th style={{ width: 160 }}>NOTA DEL TÉCNICO</th>
-              <th style={{ width: 55, textAlign: "center" as const }}>ESTADO</th>
+              <th style={{ width: 60, textAlign: "center" as const }}>ESTADO</th>
             </tr>
           </thead>
           <tbody>
-            {ots.length === 0 && (
-              <tr><td colSpan={8} style={{ textAlign: "center", color: "#888", fontStyle: "italic", padding: "8px" }}>Sin OTs registradas en este turno.</td></tr>
+            {/* OTs del plan semanal (turnero) */}
+            {otsPlan.length > 0 && (
+              <tr>
+                <td colSpan={8} style={{ background: "#dbeafe", fontWeight: "bold", fontSize: 8, padding: "3px 6px", color: "#1e40af" }}>
+                  PLAN DE TURNO — {reporte.turno.toUpperCase()} ({otsPlan.length} OT{otsPlan.length !== 1 ? "s" : ""} · {otsPlan.reduce((s,o)=>s+o.hhTotal,0)} HH)
+                </td>
+              </tr>
             )}
-            {ots.map((ot, idx) => {
+            {otsPlan.map((ot, idx) => (
+              <tr key={ot.id} className="plan-row" style={{ background: ot.critica ? "#fff1f2" : "#f8fafc" }}>
+                <td style={{ textAlign: "center", fontSize: 8 }}>{idx + 1}</td>
+                <td style={{ textAlign: "center", fontSize: 8, fontWeight: "bold", color: TIPO_COLOR[ot.tipoOT] ?? "#000" }}>
+                  {ot.tipoOT || "—"}
+                  <div style={{ fontSize: 6, marginTop: 1 }}>
+                    <span className="plan-badge">PLAN</span>
+                  </div>
+                </td>
+                <td style={{ fontWeight: "bold", fontFamily: "monospace", fontSize: 8 }}>{ot.tag || "OPEPLANT"}</td>
+                <td style={{ textAlign: "center", fontSize: 8 }}>{ot.hhTotal || "—"}</td>
+                <td style={{ fontFamily: "monospace", fontSize: 8 }}>{ot.numeroOT}</td>
+                <td style={{ fontSize: 8 }}>{ot.descripcion || "—"}</td>
+                <td style={{ fontSize: 8, fontStyle: ot.nota ? "normal" : "italic", color: ot.nota ? "#1e293b" : "#94a3b8" }}>
+                  {ot.nota || "—"}
+                  {ot.critica   && <div style={{ fontSize: 7, color: "#dc2626", fontWeight: "bold" }}>⚠ CRÍTICA</div>}
+                  {ot.pendiente && <div style={{ fontSize: 7, color: "#d97706", fontWeight: "bold" }}>→ SGTE TURNO</div>}
+                </td>
+                <td style={{ textAlign: "center", fontSize: 7.5, fontWeight: "bold" }}>
+                  <span style={{ color: "#16a34a", background: "#dcfce7", padding: "2px 5px", borderRadius: 3 }}>PLAN</span>
+                </td>
+              </tr>
+            ))}
+
+            {/* OTs registradas (CMR/CMP del sistema) */}
+            {otsRegistradas.length > 0 && (
+              <tr>
+                <td colSpan={8} style={{ background: "#f0fdf4", fontWeight: "bold", fontSize: 8, padding: "3px 6px", color: "#166534" }}>
+                  CMR / CMP REGISTRADOS EN SISTEMA ({otsRegistradas.length} OT{otsRegistradas.length !== 1 ? "s" : ""})
+                </td>
+              </tr>
+            )}
+            {otsRegistradas.map((ot, idx) => {
               const concluida = ["completada","concluido","revisado"].includes(ot.estado);
               return (
                 <tr key={ot.id} style={{ background: ot.critica ? "#fff1f2" : concluida ? "#f0fdf4" : "white" }}>
-                  <td style={{ textAlign: "center", fontSize: 8 }}>{idx + 1}</td>
+                  <td style={{ textAlign: "center", fontSize: 8 }}>{otsPlan.length + idx + 1}</td>
                   <td style={{ textAlign: "center", fontSize: 8, fontWeight: "bold", color: TIPO_COLOR[ot.tipoOT] ?? "#000" }}>{ot.tipoOT}</td>
                   <td style={{ fontWeight: "bold", fontFamily: "monospace", fontSize: 8 }}>{ot.tag}</td>
                   <td style={{ textAlign: "center", fontSize: 8 }}>{ot.hhTotal || "—"}</td>
@@ -156,8 +204,8 @@ export default function PrintClientTecnico({
                   <td style={{ fontSize: 8 }}>{ot.descripcion}</td>
                   <td style={{ fontSize: 8, fontStyle: ot.nota ? "normal" : "italic", color: ot.nota ? "#1e293b" : "#94a3b8" }}>
                     {ot.nota || "—"}
-                    {ot.critica   && <div style={{ fontSize: 7, color: "#dc2626", fontWeight: "bold", marginTop: 1 }}>⚠ CRÍTICA</div>}
-                    {ot.pendiente && <div style={{ fontSize: 7, color: "#d97706", fontWeight: "bold", marginTop: 1 }}>→ PASA AL SIGUIENTE TURNO</div>}
+                    {ot.critica   && <div style={{ fontSize: 7, color: "#dc2626", fontWeight: "bold" }}>⚠ CRÍTICA</div>}
+                    {ot.pendiente && <div style={{ fontSize: 7, color: "#d97706", fontWeight: "bold" }}>→ SGTE TURNO</div>}
                   </td>
                   <td style={{ textAlign: "center", fontSize: 7.5, fontWeight: "bold" }}>
                     {concluida
@@ -168,10 +216,14 @@ export default function PrintClientTecnico({
                 </tr>
               );
             })}
+
+            {ots.length === 0 && (
+              <tr><td colSpan={8} style={{ textAlign: "center", color: "#888", fontStyle: "italic", padding: "8px" }}>Sin OTs registradas en este turno.</td></tr>
+            )}
           </tbody>
         </table>
 
-        {/* ── NOVEDADES DEL TURNO ── */}
+        {/* ── NOVEDADES ── */}
         <div className="section-title">NOVEDADES / ALERTAS PARA EL SIGUIENTE TURNO</div>
         {reporte.novedades.length === 0 ? (
           <table><tbody><tr><td style={{ fontSize: 8, color: "#888", fontStyle: "italic", padding: "6px 8px" }}>Sin novedades registradas.</td></tr></tbody></table>
