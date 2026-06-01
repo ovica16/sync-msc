@@ -26,6 +26,14 @@ const SENTIDO_META: Record<SentidoInspeccion, { emoji: string; color: string; la
 type ChecklistItem = { _id: string; nombre: string; disciplina: string; nivelTag: number | null; areaProceso: string; items: { descripcion: string; orden: number; sentido?: SentidoInspeccion }[] };
 type InspeccionEntry = { checklistId: string; checklistNombre: string; items: { descripcion: string; sentido?: SentidoInspeccion; ok: boolean; obs: string }[] };
 
+type AdjuntoItem = {
+  id: string;
+  tipo: "foto" | "documento";
+  nombre: string;
+  dataUrl: string;
+  comentario: string;
+};
+
 type LineaForm = {
   id: string;
   tag: string; descripcionEquipo: string; tipoEquipo: string; categoriaISO: string; criticidad: string;
@@ -36,6 +44,7 @@ type LineaForm = {
   descripcionTrabajo: string; tareasEjecutadas: string[];
   inspeccion: InspeccionEntry | null;
   observaciones: string;
+  adjuntos: AdjuntoItem[];
 };
 
 // Detecta la disciplina usando todas las fuentes disponibles
@@ -182,8 +191,38 @@ function newLinea(): LineaForm {
     tag: "", descripcionEquipo: "", tipoEquipo: "", categoriaISO: "", criticidad: "",
     nivel: 0, disciplina: "", areaProceso: "", tipoOT: "",
     sintoma: "", causaProbable: "", resolucionAplicada: "", tiempoEstimadoHrs: "", tiempoRealHrs: "",
-    descripcionTrabajo: "", tareasEjecutadas: [], inspeccion: null, observaciones: "",
+    descripcionTrabajo: "", tareasEjecutadas: [], inspeccion: null, observaciones: "", adjuntos: [],
   };
+}
+
+// Comprime imagen via Canvas a max 1024px y calidad 0.75
+async function comprimirImagen(file: File): Promise<string> {
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const MAX = 1024;
+        const ratio = Math.min(MAX / img.width, MAX / img.height, 1);
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width * ratio;
+        canvas.height = img.height * ratio;
+        const ctx = canvas.getContext("2d")!;
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", 0.75));
+      };
+      img.src = e.target!.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function leerDocumento(file: File): Promise<string> {
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = e => resolve(e.target!.result as string);
+    reader.readAsDataURL(file);
+  });
 }
 
 function lineaFromPlan(ot: OTPlan): LineaForm {
@@ -196,6 +235,7 @@ function lineaFromPlan(ot: OTPlan): LineaForm {
     // Pre-cargar siempre la descripción del plan como detalle de trabajo
     descripcionTrabajo: ot.descripcion ?? "",
     tiempoEstimadoHrs: ot.hhTotal ? String(ot.hhTotal) : "",
+    adjuntos: [],
   };
 }
 
@@ -462,6 +502,7 @@ function LineaEditor({
   const [causas, setCausas] = useState<FaultEntry[]>([]);
   const [checklists, setChecklists] = useState<ChecklistItem[]>([]);
   const [loadingCl, setLoadingCl] = useState(false);
+  const [cargandoAdj, setCargandoAdj] = useState(false);
 
   function patch(p: Partial<LineaForm>) { setL(prev => ({ ...prev, ...p })); }
 
@@ -555,7 +596,8 @@ function LineaEditor({
       .catch(() => setCausas([]));
   }, [L.sintoma, L.categoriaISO, L.tipoOT, modosList]);
 
-  const canConfirm = !!L.tag && !!L.tipoOT;
+  const adjSinComentario = L.adjuntos.some(a => !a.comentario.trim());
+  const canConfirm = !!L.tag && !!L.tipoOT && !adjSinComentario;
 
   return (
     <div style={{ ...S.card, border: "2px solid #2563eb", background: "#f8fbff", marginBottom: 14 }}>
@@ -823,6 +865,110 @@ function LineaEditor({
         </div>
       )}
 
+      {/* ── Evidencias: Fotos y Documentos ── */}
+      {L.tipoOT && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", letterSpacing: "0.07em", textTransform: "uppercase" as const, marginBottom: 10 }}>
+            Evidencias (fotos / documentos)
+          </div>
+
+          {/* Lista de adjuntos ya agregados */}
+          {L.adjuntos.map((adj, i) => (
+            <div key={adj.id} style={{ background: "#f8fafc", border: adj.comentario.trim() ? "1px solid #e2e8f0" : "1px solid #fca5a5", borderRadius: 8, padding: "10px 12px", marginBottom: 8 }}>
+              <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                {adj.tipo === "foto" ? (
+                  <img src={adj.dataUrl} alt={adj.nombre}
+                    style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 6, flexShrink: 0, border: "1px solid #e2e8f0" }} />
+                ) : (
+                  <div style={{ width: 60, height: 60, background: "#f1f5f9", borderRadius: 6, display: "flex", flexDirection: "column" as const, alignItems: "center", justifyContent: "center", flexShrink: 0, border: "1px solid #e2e8f0" }}>
+                    <span style={{ fontSize: 20 }}>📄</span>
+                    <span style={{ fontSize: 9, color: "#64748b", textAlign: "center" as const, padding: "0 4px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const, maxWidth: 56 }}>{adj.nombre.split(".").pop()?.toUpperCase()}</span>
+                  </div>
+                )}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 11, color: "#64748b", marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{adj.nombre}</div>
+                  <input
+                    value={adj.comentario}
+                    onChange={e => {
+                      const upd = [...L.adjuntos];
+                      upd[i] = { ...upd[i], comentario: e.target.value };
+                      patch({ adjuntos: upd });
+                    }}
+                    placeholder={`Comentario obligatorio sobre ${adj.tipo === "foto" ? "la foto" : "el documento"}…`}
+                    style={{ ...S.input, fontSize: 12, borderColor: adj.comentario.trim() ? "#cbd5e1" : "#fca5a5", background: adj.comentario.trim() ? "white" : "#fff5f5" }}
+                  />
+                  {!adj.comentario.trim() && (
+                    <p style={{ fontSize: 11, color: "#dc2626", marginTop: 3 }}>⚠ Comentario requerido para confirmar</p>
+                  )}
+                </div>
+                <button type="button" onClick={() => patch({ adjuntos: L.adjuntos.filter((_, j) => j !== i) })}
+                  style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 16, paddingTop: 2, flexShrink: 0 }}>✕</button>
+              </div>
+            </div>
+          ))}
+
+          {/* Botones para agregar */}
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" as const }}>
+            {/* Foto */}
+            <label style={{ display: "flex", alignItems: "center", gap: 7, padding: "8px 14px", border: "1.5px dashed #94a3b8", borderRadius: 8, cursor: cargandoAdj ? "not-allowed" : "pointer", background: "white", fontSize: 13, color: "#475569", fontWeight: 600 }}>
+              <span style={{ fontSize: 18 }}>📷</span>
+              {cargandoAdj ? "Procesando…" : "Tomar foto / imagen"}
+              <input type="file" accept="image/*" capture="environment" style={{ display: "none" }}
+                disabled={cargandoAdj}
+                onChange={async e => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  setCargandoAdj(true);
+                  try {
+                    const dataUrl = await comprimirImagen(file);
+                    patch({ adjuntos: [...L.adjuntos, { id: Math.random().toString(36).slice(2), tipo: "foto", nombre: file.name, dataUrl, comentario: "" }] });
+                  } finally { setCargandoAdj(false); e.target.value = ""; }
+                }} />
+            </label>
+
+            {/* Seleccionar imagen de galería */}
+            <label style={{ display: "flex", alignItems: "center", gap: 7, padding: "8px 14px", border: "1.5px dashed #94a3b8", borderRadius: 8, cursor: cargandoAdj ? "not-allowed" : "pointer", background: "white", fontSize: 13, color: "#475569", fontWeight: 600 }}>
+              <span style={{ fontSize: 18 }}>🖼️</span>
+              Galería (JPG/PNG)
+              <input type="file" accept="image/jpeg,image/png,image/heic,image/webp" style={{ display: "none" }}
+                disabled={cargandoAdj}
+                onChange={async e => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  setCargandoAdj(true);
+                  try {
+                    const dataUrl = await comprimirImagen(file);
+                    patch({ adjuntos: [...L.adjuntos, { id: Math.random().toString(36).slice(2), tipo: "foto", nombre: file.name, dataUrl, comentario: "" }] });
+                  } finally { setCargandoAdj(false); e.target.value = ""; }
+                }} />
+            </label>
+
+            {/* Documento */}
+            <label style={{ display: "flex", alignItems: "center", gap: 7, padding: "8px 14px", border: "1.5px dashed #94a3b8", borderRadius: 8, cursor: cargandoAdj ? "not-allowed" : "pointer", background: "white", fontSize: 13, color: "#475569", fontWeight: 600 }}>
+              <span style={{ fontSize: 18 }}>📄</span>
+              Documento (PDF/Word)
+              <input type="file" accept=".pdf,.doc,.docx,.xls,.xlsx" style={{ display: "none" }}
+                disabled={cargandoAdj}
+                onChange={async e => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  setCargandoAdj(true);
+                  try {
+                    const dataUrl = await leerDocumento(file);
+                    patch({ adjuntos: [...L.adjuntos, { id: Math.random().toString(36).slice(2), tipo: "documento", nombre: file.name, dataUrl, comentario: "" }] });
+                  } finally { setCargandoAdj(false); e.target.value = ""; }
+                }} />
+            </label>
+          </div>
+
+          {adjSinComentario && (
+            <p style={{ fontSize: 12, color: "#dc2626", marginTop: 8, fontWeight: 600 }}>
+              ⚠ Todos los adjuntos deben tener un comentario antes de confirmar el equipo.
+            </p>
+          )}
+        </div>
+      )}
+
       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
         <button type="button" onClick={onCancel} style={S.btnGhost}>Cancelar</button>
         <button type="button" onClick={() => onConfirm(L)} disabled={!canConfirm} style={S.btnPrimary(!canConfirm)}>Confirmar equipo</button>
@@ -1074,7 +1220,8 @@ export default function RegistroOTPage() {
         origenPlan: form.origenPlan,
         ...(form.origenPlan ? { programacionSemanalId: form.programacionSemanalId, otJdeNumero: form.otJdeNumero, otJdeDia: form.otJdeDia } : { ...(form.otJdeNumero ? { otJdeNumero: form.otJdeNumero } : {}) }),
         lineas: form.lineas.map(l => ({
-          tag: l.tag, descripcionEquipo: l.descripcionEquipo, tipoOT: l.tipoOT, adjuntos: [],
+          tag: l.tag, descripcionEquipo: l.descripcionEquipo, tipoOT: l.tipoOT,
+          adjuntos: l.adjuntos.map(a => ({ tipo: a.tipo, nombre: a.nombre, dataUrl: a.dataUrl, comentario: a.comentario })),
           ...(isCorrectivo(l.tipoOT) ? {
             sintoma: l.sintoma || undefined, causaProbable: l.causaProbable || undefined,
             resolucionAplicada: l.resolucionAplicada || undefined,

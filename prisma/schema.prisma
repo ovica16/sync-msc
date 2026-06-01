@@ -159,6 +159,7 @@ model OtLinea {
   descripcionTrabajo String?
   tareasEjecutadas   String[]
   observaciones      String?
+  adjuntos           Json     @default("[]") // AdjuntoItem[]
   ordenTrabajo       OrdenTrabajo @relation(fields: [ordenTrabajoId], references: [id], onDelete: Cascade)
 
   @@index([ordenTrabajoId])

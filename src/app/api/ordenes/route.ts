@@ -36,6 +36,7 @@ function serializeOT(ot: Record<string, unknown> & {
       descripcionTrabajo: l.descripcionTrabajo,
       tareasEjecutadas: l.tareasEjecutadas,
       observaciones: l.observaciones,
+      adjuntos: l.adjuntos ?? [],
     })),
     historialCambios: (ot.historial ?? []).map(h => ({
       fechaHora: h.fechaHora,
@@ -161,6 +162,7 @@ export async function POST(req: NextRequest) {
             descripcionTrabajo: l.descripcionTrabajo as string | null ?? null,
             tareasEjecutadas: (l.tareasEjecutadas as string[]) ?? [],
             observaciones: l.observaciones as string | null ?? null,
+            adjuntos: (l.adjuntos as object[]) ?? [],
           })),
         },
         historial: {
