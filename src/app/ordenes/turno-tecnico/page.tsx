@@ -638,6 +638,10 @@ export default function ReporteTurnoTecnicoPage() {
                                     {o.otJdeNumero && <span style={{ fontFamily: "monospace", fontSize: 11, color: "#64748b" }}>JDE: {o.otJdeNumero}</span>}
                                     <span style={{ fontFamily: "monospace", fontSize: 12, color: "#1d4ed8" }}>{linea?.tag}</span>
                                     {linea?.tiempoRealHrs && <span style={{ fontSize: 11, color: "#16a34a", fontWeight: 700 }}>{linea.tiempoRealHrs}h</span>}
+                                    {/* Fecha de la OT — confirma que es del día correcto */}
+                                    <span style={{ fontSize: 10, color: "#94a3b8" }}>
+                                      📅 {new Date(o.fecha).toLocaleDateString("es-BO", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "UTC" })}
+                                    </span>
                                   </div>
                                   <p style={{ fontSize: 12, color: "#475569" }}>
                                     {linea?.descripcionEquipo ?? linea?.sintoma ?? linea?.descripcionTrabajo ?? "—"}
