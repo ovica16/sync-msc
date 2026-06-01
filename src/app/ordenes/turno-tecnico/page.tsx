@@ -198,16 +198,20 @@ export default function ReporteTurnoTecnicoPage() {
     const diaOT = diaSemana(form.fecha);
     const grupoTurno = form.turno === "Nocturno" ? GRUPO_NOCTURNO : GRUPO_DIURNO;
 
-    // ── 1. OTs registradas ──────────────────────────────────────────────────
+    // ── 1. OTs registradas — solo CMR y CMP del turno activo ───────────────
     const paramsOrd = new URLSearchParams({ fecha: form.fecha, turno: form.turno, limit: "100" });
     if (area) paramsOrd.set("area", area);
     const dataOrd: OTRegistrada[] = await fetch(`/api/ordenes?${paramsOrd}`).then(r => r.json()).catch(() => []);
-    // Filtrar por nombre del técnico si es rol=4
+    // Solo correctivos (CMR/CMP); los preventivos son de equipos de mantenimiento regular (G1-G4)
+    const soloCorrectivos = (Array.isArray(dataOrd) ? dataOrd : []).filter(o =>
+      o.lineas.some(l => l.tipoOT === "CMR" || l.tipoOT === "CMP")
+    );
+    // Filtrar además por nombre del técnico si es rol=4
     const registradas = user.rol === 4
-      ? (Array.isArray(dataOrd) ? dataOrd : []).filter(o =>
+      ? soloCorrectivos.filter(o =>
           o.tecnicos.some(t => t.nombreCompleto.toLowerCase().includes(user.nombre.toLowerCase()))
         )
-      : (Array.isArray(dataOrd) ? dataOrd : []);
+      : soloCorrectivos;
     setOtsReg(registradas);
 
     // ── 2. OTs del plan semanal (incluyendo bitácora OPEPLANT) ──────────────
@@ -495,17 +499,29 @@ export default function ReporteTurnoTecnicoPage() {
             {/* ── Step 2: OTs del turno ── */}
             {step === 2 && (
               <div style={S.card}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                  <div style={{ fontWeight: 700, fontSize: 14, color: "#0f2847" }}>OTs realizadas en el turno</div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: "#0f2847" }}>OTs realizadas en el turno</div>
+                    {/* Fecha prominente */}
+                    <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 5, flexWrap: "wrap" as const }}>
+                      <span style={{ fontSize: 15, fontWeight: 800, color: form.turno === "Diurno" ? "#d97706" : "#7c3aed" }}>
+                        {form.turno === "Diurno" ? "☀️" : "🌙"} {form.turno}
+                      </span>
+                      <span style={{ fontSize: 15, fontWeight: 800, color: "#0f2847", letterSpacing: "0.03em" }}>
+                        {new Date(form.fecha + "T12:00:00").toLocaleDateString("es-BO", { weekday: "long", day: "2-digit", month: "long", year: "numeric" })}
+                      </span>
+                      <span style={{ fontSize: 12, color: "#64748b", fontWeight: 600 }}>{disciplina || areaEfectiva}</span>
+                    </div>
+                    <p style={{ fontSize: 11, color: "#94a3b8", marginTop: 3 }}>
+                      Solo OTs CMR y CMP del día seleccionado + plan de turno
+                    </p>
+                  </div>
                   {totalSeleccionadas > 0 && (
-                    <span style={{ fontSize: 12, fontWeight: 700, color: "#2563eb", background: "#eff6ff", borderRadius: 20, padding: "3px 10px" }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "#2563eb", background: "#eff6ff", borderRadius: 20, padding: "3px 10px", flexShrink: 0 }}>
                       {totalSeleccionadas} seleccionadas
                     </span>
                   )}
                 </div>
-                <p style={{ fontSize: 12, color: "#64748b", marginBottom: 14 }}>
-                  {form.turno} · {form.fecha} · {disciplina || areaEfectiva}
-                </p>
 
                 <input value={filtroTexto} onChange={e => setFiltroTexto(e.target.value)}
                   placeholder="Filtrar por OT, TAG o descripción…" style={{ ...S.input, marginBottom: 14, fontSize: 13 }} />
@@ -603,8 +619,8 @@ export default function ReporteTurnoTecnicoPage() {
                     {/* ── OTs registradas del día ── */}
                     {otsRegFiltradas.length > 0 && (
                       <>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", letterSpacing: "0.06em", textTransform: "uppercase" as const, marginBottom: 8, marginTop: (planNormal.length > 0 || bitacora.length > 0) ? 12 : 0 }}>
-                          OTs registradas en sistema ({otsRegFiltradas.length})
+                        <div style={{ fontSize: 11, fontWeight: 700, color: "#16a34a", letterSpacing: "0.06em", textTransform: "uppercase" as const, marginBottom: 8, marginTop: (planNormal.length > 0 || bitacora.length > 0) ? 12 : 0 }}>
+                          CMR / CMP registrados en el sistema ({otsRegFiltradas.length})
                         </div>
                         {otsRegFiltradas.map(o => {
                           const sel = form.otIds.includes(o._id);
