@@ -122,6 +122,14 @@ type FormData = {
   tecnicos: { usuarioId: string; nombreCompleto: string }[];
   lineas: LineaForm[];
   programacionSemanalId: string; otJdeNumero: string; otJdeDia: string; origenPlan: boolean;
+  esRecurrente: boolean; // OT que aparece en múltiples días de la semana
+};
+
+type AvanceDiarioForm = {
+  hhTrabajadas: string;
+  tareas: string[];
+  tareaInput: string;
+  observaciones: string;
 };
 
 // ─── Date/Helpers ─────────────────────────────────────────────────────────────
@@ -1070,7 +1078,7 @@ export default function RegistroOTPage() {
   // ── Formulario ──
   const emptyForm = useCallback((): FormData => ({
     fecha: shiftFecha, turno: shiftTurno, areaCodigo: "", tecnicos: [],
-    lineas: [], programacionSemanalId: "", otJdeNumero: "", otJdeDia: "", origenPlan: false,
+    lineas: [], programacionSemanalId: "", otJdeNumero: "", otJdeDia: "", origenPlan: false, esRecurrente: false,
   }), [shiftFecha, shiftTurno]);
 
   const [form, setForm] = useState<FormData>(emptyForm);
@@ -1086,6 +1094,72 @@ export default function RegistroOTPage() {
   const [submitErr, setSubmitErr] = useState("");
   const [done, setDone] = useState(false);
   const [doneOT, setDoneOT] = useState<{ numeroOT: string; estado: string } | null>(null);
+
+  // ── OTs recurrentes: misma numeroOT en 2+ días del plan ──
+  const recurrentesNums = React.useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const r of planRefs) counts[r.ot.numeroOT] = (counts[r.ot.numeroOT] || 0) + 1;
+    return new Set(Object.entries(counts).filter(([, c]) => c >= 2).map(([n]) => n));
+  }, [planRefs]);
+
+  // ── Avance diario para OTs recurrentes ya iniciadas ──
+  const [avanceRef, setAvanceRef] = useState<PlanRef | null>(null);
+  const [avanceForm, setAvanceForm] = useState<AvanceDiarioForm>({ hhTrabajadas: "", tareas: [], tareaInput: "", observaciones: "" });
+  const [savingAvance, setSavingAvance] = useState(false);
+  const [savingRevision, setSavingRevision] = useState(false);
+
+  async function confirmarAvanceDiario() {
+    if (!avanceRef?.ot.ordenTrabajoId) return;
+    setSavingAvance(true);
+    try {
+      await fetch(`/api/ordenes/${avanceRef.ot.ordenTrabajoId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          registroDiario: {
+            fecha: shiftFecha,
+            tecnico: user?.nombre ?? "Técnico",
+            usuarioId: user?.id,
+            hhTrabajadas: parseFloat(avanceForm.hhTrabajadas) || 0,
+            tareasEjecutadas: avanceForm.tareas,
+            observaciones: avanceForm.observaciones || null,
+          },
+          cambio: `Avance del día ${avanceRef.ot.dia} registrado`,
+          usuarioId: user?.id,
+          nombreUsuario: user?.nombre,
+        }),
+      });
+      setAvanceRef(null);
+      setAvanceForm({ hhTrabajadas: "", tareas: [], tareaInput: "", observaciones: "" });
+    } finally {
+      setSavingAvance(false);
+    }
+  }
+
+  async function enviarRevisionRecurrente(ref: PlanRef) {
+    if (!ref.ot.ordenTrabajoId) return;
+    setSavingRevision(true);
+    try {
+      await fetch(`/api/ordenes/${ref.ot.ordenTrabajoId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          estado: "pendiente_revision",
+          cambio: "OT recurrente enviada a revisión — ciclo semanal completo",
+          usuarioId: user?.id,
+          nombreUsuario: user?.nombre,
+        }),
+      });
+      // Refrescar plan para reflejar nuevo estado
+      setPlanRefs(prev => prev.map(r =>
+        r.ot.ordenTrabajoId === ref.ot.ordenTrabajoId
+          ? { ...r, ot: { ...r.ot, estado: "en_revision" } as OTPlan }
+          : r
+      ));
+    } finally {
+      setSavingRevision(false);
+    }
+  }
 
   // ── Detalle OTs ya registradas ──
   const [otDetalles, setOtDetalles] = useState<Record<string, OTDetalle | null>>({});
@@ -1175,7 +1249,7 @@ export default function RegistroOTPage() {
 
   // ─── Seleccionar OT del plan → abrir registro ──────────────────────────────
 
-  function abrirRegistroPlan(ref: PlanRef) {
+  function abrirRegistroPlan(ref: PlanRef, esRecurrente = false) {
     const linea = lineaFromPlan(ref.ot);
     // Pre-cargar personal asignado en el plan
     const tecnicos: FormData["tecnicos"] = ref.ot.personalAsignado.map(nombre => ({
@@ -1195,8 +1269,10 @@ export default function RegistroOTPage() {
       lineas: [linea],
       programacionSemanalId: ref.planId,
       otJdeNumero: ref.ot.numeroOT,
-      otJdeDia: ref.ot.dia,
+      // Para recurrentes no filtramos por día (el backend vinculará todos los días)
+      otJdeDia: esRecurrente ? "" : ref.ot.dia,
       origenPlan: true,
+      esRecurrente,
     });
     // Abrir el editor de la linea pre-cargada
     setEditLinea({ ...linea });
@@ -1275,14 +1351,21 @@ export default function RegistroOTPage() {
 
   // ─── Submit ────────────────────────────────────────────────────────────────
 
-  async function submit(estado: "borrador" | "pendiente_revision") {
+  async function submit(estado: "borrador" | "pendiente_revision" | "en_proceso") {
     setSubmitting(true); setSubmitErr("");
     try {
+      // OTs recurrentes siempre se crean en en_proceso (acumulan avances durante la semana)
+      const estadoFinal = form.esRecurrente ? "en_proceso" : estado;
       const payload = {
         fecha: form.fecha, turno: form.turno, areaCodigo: form.areaCodigo,
-        tecnicos: form.tecnicos, estado,
+        tecnicos: form.tecnicos, estado: estadoFinal,
         origenPlan: form.origenPlan,
-        ...(form.origenPlan ? { programacionSemanalId: form.programacionSemanalId, otJdeNumero: form.otJdeNumero, otJdeDia: form.otJdeDia } : { ...(form.otJdeNumero ? { otJdeNumero: form.otJdeNumero } : {}) }),
+        ...(form.origenPlan ? {
+          programacionSemanalId: form.programacionSemanalId,
+          otJdeNumero: form.otJdeNumero,
+          otJdeDia: form.esRecurrente ? null : form.otJdeDia,
+          esRecurrente: form.esRecurrente,
+        } : { ...(form.otJdeNumero ? { otJdeNumero: form.otJdeNumero } : {}) }),
         lineas: form.lineas.map(l => ({
           tag: l.tag, descripcionEquipo: l.descripcionEquipo, tipoOT: l.tipoOT,
           adjuntos: l.adjuntos.map(a => ({ tipo: a.tipo, nombre: a.nombre, dataUrl: a.dataUrl, comentario: a.comentario, comentariosExtra: a.comentariosExtra })),
@@ -1407,6 +1490,7 @@ export default function RegistroOTPage() {
               {planRefs.filter(r => r.ot.dia === diaSeleccionado).map((ref, i) => {
                 const ot = ref.ot;
                 const yaRegistrada = !!ot.ordenTrabajoId;
+                const esRecurrente = recurrentesNums.has(ot.numeroOT);
                 // Auto-detectar guardia: tag contiene OPEPLANT o esGuardia marcado
                 const esGuardia = ot.esGuardia || ot.tag?.includes("OPEPLANT");
                 const tipoColor = TIPO_COLOR[ot.tipoOT as TipoOT] ?? "#64748b";
@@ -1471,29 +1555,54 @@ export default function RegistroOTPage() {
                             </div>
                           )
                         ) : yaRegistrada ? (
-                          <button
-                            onClick={() => {
-                              if (!ot.ordenTrabajoId) return;
-                              if (ot.ordenTrabajoId in otDetalles) {
-                                setOtDetalles(prev => { const n = { ...prev }; delete n[ot.ordenTrabajoId!]; return n; });
-                              } else {
-                                cargarOtDetalle(ot.ordenTrabajoId);
-                              }
-                            }}
-                            style={{ fontSize: 12, color: "#16a34a", background: "none", border: "none", cursor: "pointer", fontWeight: 700 }}>
-                            #{ot.ordenTrabajoNum} {ot.ordenTrabajoId && ot.ordenTrabajoId in otDetalles ? "▲ Ocultar" : "▼ Ver detalles"}
-                          </button>
+                          // OT ya registrada: mostrar según si es recurrente o no
+                          esRecurrente ? (
+                            <div style={{ display: "flex", flexDirection: "column", gap: 5, alignItems: "flex-end" }}>
+                              <span style={{ fontSize: 10, fontWeight: 700, background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe", borderRadius: 6, padding: "2px 8px" }}>
+                                🔁 RECURRENTE
+                              </span>
+                              <button
+                                onClick={() => { setAvanceRef(ref); setAvanceForm({ hhTrabajadas: "", tareas: [], tareaInput: "", observaciones: "" }); }}
+                                style={{ ...S.btnPrimary(), padding: "6px 12px", fontSize: 12 }}>
+                                + Avance del día
+                              </button>
+                              <button
+                                onClick={() => enviarRevisionRecurrente(ref)}
+                                disabled={savingRevision}
+                                style={{ ...S.btnGreen(savingRevision), padding: "5px 10px", fontSize: 11 }}>
+                                {savingRevision ? "Enviando…" : "Enviar a revisión ✓"}
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                if (!ot.ordenTrabajoId) return;
+                                if (ot.ordenTrabajoId in otDetalles) {
+                                  setOtDetalles(prev => { const n = { ...prev }; delete n[ot.ordenTrabajoId!]; return n; });
+                                } else {
+                                  cargarOtDetalle(ot.ordenTrabajoId);
+                                }
+                              }}
+                              style={{ fontSize: 12, color: "#16a34a", background: "none", border: "none", cursor: "pointer", fontWeight: 700 }}>
+                              #{ot.ordenTrabajoNum} {ot.ordenTrabajoId && ot.ordenTrabajoId in otDetalles ? "▲ Ocultar" : "▼ Ver detalles"}
+                            </button>
+                          )
                         ) : ot.pasarNoche ? (
                           <span style={{ fontSize: 11, fontWeight: 700, color: "#7c3aed", background: "#ede9fe", border: "1px solid #c4b5fd", borderRadius: 6, padding: "4px 10px" }}>
                             🌙 En turno noche
                           </span>
                         ) : (
                           <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-end" }}>
-                            <button onClick={() => abrirRegistroPlan(ref)}
+                            {esRecurrente && (
+                              <span style={{ fontSize: 10, fontWeight: 700, background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe", borderRadius: 6, padding: "2px 8px" }}>
+                                🔁 RECURRENTE
+                              </span>
+                            )}
+                            <button onClick={() => abrirRegistroPlan(ref, esRecurrente)}
                               style={{ ...S.btnPrimary(), padding: "7px 14px", fontSize: 13 }}>
-                              Registrar →
+                              {esRecurrente ? "Registrar 1er día →" : "Registrar →"}
                             </button>
-                            {user && user.rol <= 3 && (
+                            {user && user.rol <= 3 && !esRecurrente && (
                               <button
                                 onClick={() => { setPasarNocheRef(ref); setPasarNocheMotivo("Sin tiempo en el turno"); setPasarNocheNota(""); }}
                                 style={{ fontSize: 11, fontWeight: 700, color: "#7c3aed", background: "none", border: "1px solid #c4b5fd", borderRadius: 6, padding: "4px 10px", cursor: "pointer", whiteSpace: "nowrap" as const }}>
@@ -1541,6 +1650,69 @@ export default function RegistroOTPage() {
                         </div>
                       );
                     })()}
+
+                    {/* ── Mini-form Avance Diario (recurrentes) ── */}
+                    {avanceRef?.planId === ref.planId && avanceRef?.ot.numeroOT === ot.numeroOT && (
+                      <div style={{ marginTop: 10, borderTop: "1px solid #bfdbfe", paddingTop: 10, background: "#f0f7ff", borderRadius: "0 0 10px 10px", padding: "10px 12px" }}>
+                        <p style={{ fontSize: 12, fontWeight: 700, color: "#1d4ed8", marginBottom: 8 }}>+ Avance del día {diaSeleccionado}</p>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 8, marginBottom: 8 }}>
+                          <div>
+                            <label style={{ ...S.label, fontSize: 10 }}>HH trabajadas</label>
+                            <input type="number" min="0" step="0.5"
+                              value={avanceForm.hhTrabajadas}
+                              onChange={e => setAvanceForm(f => ({ ...f, hhTrabajadas: e.target.value }))}
+                              style={{ ...S.input, fontSize: 13 }} />
+                          </div>
+                          <div>
+                            <label style={{ ...S.label, fontSize: 10 }}>Observaciones</label>
+                            <input
+                              value={avanceForm.observaciones}
+                              onChange={e => setAvanceForm(f => ({ ...f, observaciones: e.target.value }))}
+                              placeholder="Resumen del trabajo hoy…"
+                              style={{ ...S.input, fontSize: 13 }} />
+                          </div>
+                        </div>
+                        {/* Tareas del día */}
+                        {avanceForm.tareas.length > 0 && (
+                          <div style={{ marginBottom: 6 }}>
+                            {avanceForm.tareas.map((t, ti) => (
+                              <div key={ti} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                                <span style={{ flex: 1, fontSize: 12, background: "#e0eeff", borderRadius: 5, padding: "4px 8px", color: "#1e293b" }}>{t}</span>
+                                <button type="button" onClick={() => setAvanceForm(f => ({ ...f, tareas: f.tareas.filter((_, j) => j !== ti) }))}
+                                  style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 13 }}>✕</button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+                          <input
+                            value={avanceForm.tareaInput}
+                            onChange={e => setAvanceForm(f => ({ ...f, tareaInput: e.target.value }))}
+                            onKeyDown={e => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                const t = avanceForm.tareaInput.trim();
+                                if (t) setAvanceForm(f => ({ ...f, tareas: [...f.tareas, t], tareaInput: "" }));
+                              }
+                            }}
+                            placeholder="Tarea ejecutada hoy — Enter para agregar"
+                            style={{ ...S.input, fontSize: 12, flex: 1 }} />
+                          <button type="button"
+                            onClick={() => { const t = avanceForm.tareaInput.trim(); if (t) setAvanceForm(f => ({ ...f, tareas: [...f.tareas, t], tareaInput: "" })); }}
+                            style={{ ...S.btnOutline, padding: "7px 10px", fontSize: 12 }}>+ Agregar</button>
+                        </div>
+                        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                          <button onClick={() => setAvanceRef(null)}
+                            style={{ fontSize: 12, padding: "5px 14px", borderRadius: 6, border: "1px solid #e2e8f0", background: "white", cursor: "pointer", color: "#64748b" }}>
+                            Cancelar
+                          </button>
+                          <button onClick={confirmarAvanceDiario} disabled={savingAvance || !avanceForm.hhTrabajadas}
+                            style={{ ...S.btnPrimary(!avanceForm.hhTrabajadas || savingAvance), fontSize: 12, padding: "5px 14px" }}>
+                            {savingAvance ? "Guardando…" : "Guardar avance"}
+                          </button>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Mini-form Pasar a Noche (inline, solo para esta OT) */}
                     {pasarNocheRef?.planId === ref.planId && pasarNocheRef?.ot.numeroOT === ot.numeroOT && (
@@ -1809,20 +1981,40 @@ export default function RegistroOTPage() {
                 )}
 
                 <div style={{ ...S.card, background: "#f8fafc" }}>
-                  <p style={{ fontSize: 12, color: "#64748b", lineHeight: 1.7, marginBottom: 12 }}>
-                    <strong style={{ color: "#1e293b" }}>Borrador</strong>: guarda sin enviar.{" "}
-                    <strong style={{ color: "#1e293b" }}>Enviar a revisión</strong>: el supervisor recibirá para aprobar.
-                    {form.origenPlan && <><br /><strong style={{ color: "#1d4ed8" }}>El estado en el plan semanal se actualizará automáticamente.</strong></>}
-                  </p>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                    <button onClick={() => setStep(2)} style={S.btnGhost} disabled={submitting}>← Editar</button>
-                    <button onClick={() => submit("borrador")} style={{ ...S.btnOutline, opacity: submitting ? 0.6 : 1 }} disabled={submitting}>
-                      {submitting ? "Guardando..." : "💾 Borrador"}
-                    </button>
-                    <button onClick={() => submit("pendiente_revision")} style={{ ...S.btnGreen(submitting), marginLeft: "auto" }} disabled={submitting}>
-                      {submitting ? "Enviando..." : "Enviar a revisión ✓"}
-                    </button>
-                  </div>
+                  {form.esRecurrente ? (
+                    <>
+                      <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 8, padding: "10px 13px", marginBottom: 12 }}>
+                        <p style={{ fontSize: 12, color: "#1d4ed8", fontWeight: 700, marginBottom: 3 }}>🔁 OT Recurrente — acumula HH durante la semana</p>
+                        <p style={{ fontSize: 12, color: "#475569", lineHeight: 1.6 }}>
+                          Se guardará en estado <strong>En Proceso</strong>. Los días siguientes agregas avances diarios desde la tarjeta del plan.
+                          Al finalizar la semana, usa <strong>Enviar a revisión</strong> desde la tarjeta para cerrar todo el ciclo.
+                        </p>
+                      </div>
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                        <button onClick={() => setStep(2)} style={S.btnGhost} disabled={submitting}>← Editar</button>
+                        <button onClick={() => submit("en_proceso")} style={{ ...S.btnPrimary(submitting), marginLeft: "auto" }} disabled={submitting}>
+                          {submitting ? "Guardando..." : "Guardar 1er día →"}
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <p style={{ fontSize: 12, color: "#64748b", lineHeight: 1.7, marginBottom: 12 }}>
+                        <strong style={{ color: "#1e293b" }}>Borrador</strong>: guarda sin enviar.{" "}
+                        <strong style={{ color: "#1e293b" }}>Enviar a revisión</strong>: el supervisor recibirá para aprobar.
+                        {form.origenPlan && <><br /><strong style={{ color: "#1d4ed8" }}>El estado en el plan semanal se actualizará automáticamente.</strong></>}
+                      </p>
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                        <button onClick={() => setStep(2)} style={S.btnGhost} disabled={submitting}>← Editar</button>
+                        <button onClick={() => submit("borrador")} style={{ ...S.btnOutline, opacity: submitting ? 0.6 : 1 }} disabled={submitting}>
+                          {submitting ? "Guardando..." : "💾 Borrador"}
+                        </button>
+                        <button onClick={() => submit("pendiente_revision")} style={{ ...S.btnGreen(submitting), marginLeft: "auto" }} disabled={submitting}>
+                          {submitting ? "Enviando..." : "Enviar a revisión ✓"}
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
               </>
             )}
