@@ -102,6 +102,7 @@ const S = {
 
 export default function TurneroPage() {
   const { user } = useUser();
+  const esAdmin = user?.rol === 1;
   const hoy = new Date();
 
   const [semana, setSemana] = useState(isoWeekNumber(hoy));
@@ -109,6 +110,7 @@ export default function TurneroPage() {
   const [programas, setProgramas]       = useState<Programa[]>([]);
   const [otsReactivas, setOtsReactivas] = useState<OTReactiva[]>([]);
   const [loading, setLoading]           = useState(false);
+  const [deletingId, setDeletingId]     = useState<string | null>(null);
 
   // Fechas de la semana
   const lunes = getMondayOfWeek(anio, semana);
@@ -379,6 +381,14 @@ export default function TurneroPage() {
                                       {hhOT > 0 && (
                                         <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 700, color: "#d97706" }}>{Math.round(hhOT * 10) / 10}HH</span>
                                       )}
+                                      {esAdmin && (
+                                        <button
+                                          onClick={() => setDeletingId(ot._id)}
+                                          style={{ marginLeft: "auto", fontSize: 11, color: "#dc2626", fontWeight: 600, background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                                        >
+                                          Eliminar
+                                        </button>
+                                      )}
                                     </div>
                                     <p style={{ fontSize: 12, color: "#475569", marginBottom: 3 }}>
                                       {ot.tecnicos.map(t => t.nombreCompleto).join(" · ")}
@@ -433,5 +443,46 @@ export default function TurneroPage() {
         )}
       </div>
     </div>
+
+    {/* Modal confirmación eliminar */}
+    {deletingId && (
+      <div
+        style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+        onClick={() => setDeletingId(null)}
+      >
+        <div
+          style={{ background: "white", borderRadius: 12, padding: 28, maxWidth: 360, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div style={{ fontWeight: 800, fontSize: 16, color: "#0f2847", marginBottom: 8 }}>Eliminar OT</div>
+          <p style={{ fontSize: 14, color: "#475569", marginBottom: 20, lineHeight: 1.5 }}>
+            Esta acción eliminará permanentemente la OT y todos sus datos. No se puede deshacer.
+          </p>
+          <div style={{ display: "flex", gap: 10 }}>
+            <button
+              onClick={() => setDeletingId(null)}
+              style={{ flex: 1, padding: "10px 0", borderRadius: 8, border: "1px solid #e2e8f0", background: "white", fontWeight: 600, fontSize: 14, cursor: "pointer", color: "#64748b" }}
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={async () => {
+                const id = deletingId;
+                setDeletingId(null);
+                const res = await fetch(`/api/ordenes/${id}`, { method: "DELETE" });
+                if (res.ok) {
+                  setOtsReactivas(prev => prev.filter(o => o._id !== id));
+                } else {
+                  alert("Error al eliminar la OT");
+                }
+              }}
+              style={{ flex: 1, padding: "10px 0", borderRadius: 8, border: "none", background: "#dc2626", fontWeight: 700, fontSize: 14, cursor: "pointer", color: "white" }}
+            >
+              Eliminar
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
   );
 }
