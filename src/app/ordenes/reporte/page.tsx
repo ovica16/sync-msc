@@ -518,6 +518,7 @@ export default function ReporteOTPage() {
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
+                              setSelected(null);
                               setDeletingId(ot._id);
                             }}
                             style={{ fontSize: 11, color: "#dc2626", fontWeight: 600, background: "none", border: "none", cursor: "pointer", padding: 0 }}
@@ -1334,7 +1335,7 @@ export default function ReporteOTPage() {
     {/* Modal confirmación eliminar */}
     {deletingId && (
       <div
-        style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+        style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
         onClick={() => setDeletingId(null)}
       >
         <div
