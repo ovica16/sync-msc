@@ -126,10 +126,10 @@ function ModuleCard({ href, label, descripcion, icon, color, badge }: Modulo) {
   return (
     <Link href={href} style={{
       display: "flex", flexDirection: "column", alignItems: "center", gap: 10,
-      background: "white", borderRadius: 14, padding: "28px 20px",
+      background: "white", borderRadius: 14, padding: "20px 12px",
       textDecoration: "none", border: `2px solid ${color}18`,
       boxShadow: "0 2px 12px rgba(15,40,71,0.07)",
-      transition: "all 0.2s", flex: 1, minWidth: 0,
+      transition: "all 0.2s",
     }}>
       <div style={{
         width: 56, height: 56, borderRadius: "50%",
@@ -172,39 +172,30 @@ export default function OrdenesPage() {
     return true;
   });
 
-  // Distribuir en filas de 2, excepto la última que puede tener 2 o 3
-  const mitad = Math.ceil(modulos.length / 2);
-  const fila1 = modulos.slice(0, 2);
-  const fila2 = modulos.slice(2, 4);
-  const fila3 = modulos.slice(4);
-
-  void mitad;
+  // Módulos principales (primeros 4) y secundarios (resto)
+  const principales = modulos.slice(0, 4);
+  const secundarios = modulos.slice(4);
 
   return (
     <div style={{ minHeight: "100vh", background: "#f1f5f9" }}>
       <AppHeader backHref="/inicio" />
 
-      <main style={{ maxWidth: 960, margin: "0 auto", padding: "28px 20px" }}>
-        <div style={{ marginBottom: 24 }}>
+      <main style={{ maxWidth: 640, margin: "0 auto", padding: "24px 16px" }}>
+        <div style={{ marginBottom: 20 }}>
           <h1 style={{ fontSize: 20, fontWeight: 800, color: "#0f2847" }}>Órdenes de Trabajo</h1>
           <p style={{ color: "#64748b", fontSize: 13 }}>Seleccione el módulo a utilizar</p>
         </div>
 
-        {fila1.length > 0 && (
-          <div style={{ display: "flex", gap: 16, marginBottom: 16 }}>
-            {fila1.map((m) => <ModuleCard key={m.href} {...m} />)}
-          </div>
-        )}
-        {fila2.length > 0 && (
-          <div style={{ display: "flex", gap: 16, marginBottom: 16 }}>
-            {fila2.map((m) => <ModuleCard key={m.href} {...m} />)}
-          </div>
-        )}
-        {fila3.length > 0 && (
+        {/* Grilla siempre de 2 columnas */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+          {principales.map((m) => <ModuleCard key={m.href} {...m} />)}
+        </div>
+
+        {secundarios.length > 0 && (
           <>
-            <div style={{ height: 1, background: "#e2e8f0", margin: "8px 0 16px" }} />
-            <div style={{ display: "flex", gap: 16 }}>
-              {fila3.map((m) => <ModuleCard key={m.href} {...m} />)}
+            <div style={{ height: 1, background: "#e2e8f0", margin: "8px 0 12px" }} />
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              {secundarios.map((m) => <ModuleCard key={m.href} {...m} />)}
             </div>
           </>
         )}
