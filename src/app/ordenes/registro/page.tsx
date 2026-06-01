@@ -1255,9 +1255,9 @@ export default function RegistroOTPage() {
                             </button>
                           ) : (
                             <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-end" }}>
-                              <button onClick={() => abrirRegistroPlan(ref)}
+                              <button onClick={() => { setGuardiaRef(ref); setGuardiaNota(""); setGuardiaHH(0); }}
                                 style={{ ...S.btnPrimary(), padding: "7px 14px", fontSize: 13, background: "#d97706", borderColor: "#d97706" }}>
-                                Registrar →
+                                📋 Registrar turno
                               </button>
                               <span style={{ fontSize: 10, color: "#92400e", fontWeight: 600, textAlign: "right" as const }}>
                                 Cierre al fin de semana
