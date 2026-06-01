@@ -55,17 +55,18 @@ interface OTData {
   historialCambios?: CambioHistorial[];
 }
 
-// ── Paleta — header más claro ──────────────────────────────────────────────────
-const NAVY    = [13, 47, 94]     as [number, number, number]; // barras de sección
-const AZUL    = [37, 99, 235]    as [number, number, number]; // acento
-const HDR_BG  = [235, 242, 255]  as [number, number, number]; // fondo header claro (azul-50)
-const HDR_TOP = [59, 100, 165]   as [number, number, number]; // franja superior header
+// ── Paleta ────────────────────────────────────────────────────────────────────
+const NAVY    = [13, 47, 94]     as [number, number, number];
+const AZUL    = [37, 99, 235]    as [number, number, number];
+const HDR_BG  = [235, 242, 255]  as [number, number, number];
+const HDR_TOP = [59, 100, 165]   as [number, number, number];
 const GRIS    = [107, 114, 128]  as [number, number, number];
 const GRIS_L  = [241, 245, 249]  as [number, number, number];
 const BLANCO  = [255, 255, 255]  as [number, number, number];
 const NEGRO   = [17, 24, 39]     as [number, number, number];
 const VERDE   = [22, 163, 74]    as [number, number, number];
 const ROJO    = [220, 38, 38]    as [number, number, number];
+const BORDE   = [203, 213, 225]  as [number, number, number]; // marco foto
 
 // ── Labels ────────────────────────────────────────────────────────────────────
 const ESTADO_LABEL: Record<string, string> = {
@@ -89,10 +90,19 @@ function fmt(d?: string | Date) {
   if (!d) return "—";
   return new Date(d).toLocaleDateString("es-BO", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
-
 function fmtHrs(n?: number) {
   if (n == null || n === 0) return "—";
   return `${n} h`;
+}
+
+// Obtiene las dimensiones reales de una imagen desde su dataUrl
+function getImgSize(dataUrl: string): Promise<{ w: number; h: number }> {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
+    img.onerror = () => resolve({ w: 4, h: 3 }); // fallback 4:3
+    img.src = dataUrl;
+  });
 }
 
 function seccion(doc: jsPDF, texto: string, y: number, PW: number): void {
@@ -120,8 +130,30 @@ function estadoBadge(doc: jsPDF, estado: string, x: number, y: number) {
   doc.text(label, x, y + 0.5, { align: "center" });
 }
 
-// ── Generador principal ───────────────────────────────────────────────────────
-export function generarInformeOT(ot: OTData): void {
+function checkPage(doc: jsPDF, y: number, espacio: number): number {
+  const PH = doc.internal.pageSize.getHeight();
+  if (y + espacio > PH - 18) { doc.addPage(); return 20; }
+  return y;
+}
+
+function piePagina(doc: jsPDF, numOT: string) {
+  const totalPages = doc.getNumberOfPages();
+  const PW = doc.internal.pageSize.getWidth();
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    const PH = doc.internal.pageSize.getHeight();
+    doc.setFillColor(...NAVY);
+    doc.rect(0, PH - 10, PW, 10, "F");
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(6.5);
+    doc.setTextColor(...BLANCO);
+    doc.text(`SYNC MSC · Informe de Cierre OT ${numOT} · Generado ${new Date().toLocaleDateString("es-BO")}`, 15, PH - 3.5);
+    doc.text(`Pág. ${i} / ${totalPages}`, PW - 15, PH - 3.5, { align: "right" });
+  }
+}
+
+// ── Generador principal (async para leer dimensiones reales de imágenes) ──────
+export async function generarInformeOT(ot: OTData): Promise<void> {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const PW = doc.internal.pageSize.getWidth();
   let y = 15;
@@ -132,7 +164,7 @@ export function generarInformeOT(ot: OTData): void {
   const preventivos = ot.lineas.filter(l => !["CMP", "CMR"].includes(l.tipoOT));
   const tieneCorrectivos = correctivos.length > 0;
 
-  // Nombre del supervisor: usar historial (nombreUsuario) antes que revisadoPor (que guarda ID)
+  // Nombre supervisor desde historial (no el CUID guardado en revisadoPor)
   const entradaRevision = (ot.historialCambios ?? [])
     .slice().reverse()
     .find(c => /revisado|aprobad|concluid/i.test(c.cambio));
@@ -145,46 +177,38 @@ export function generarInformeOT(ot: OTData): void {
   const todosAdjuntos = ot.lineas.flatMap(l =>
     (l.adjuntos ?? []).map(a => ({ ...a, tag: l.tag }))
   );
-  const fotos = todosAdjuntos.filter(a => a.tipo === "foto");
+  const fotos      = todosAdjuntos.filter(a => a.tipo === "foto");
   const documentos = todosAdjuntos.filter(a => a.tipo === "documento");
 
-  // ── Encabezado — fondo claro ─────────────────────────────────────────────────
-  // Franja superior fina
+  // Pre-cargar dimensiones reales de todas las fotos (async, antes de generar el PDF)
+  const fotoSizes = await Promise.all(fotos.map(f => getImgSize(f.dataUrl)));
+
+  // ── Encabezado ───────────────────────────────────────────────────────────────
   doc.setFillColor(...HDR_TOP);
   doc.rect(0, 0, PW, 5, "F");
-
-  // Fondo claro principal
   doc.setFillColor(...HDR_BG);
   doc.rect(0, 5, PW, 24, "F");
-
-  // Línea de acento azul en la parte inferior del header
   doc.setFillColor(...AZUL);
   doc.rect(0, 29, PW, 1.5, "F");
 
-  // Texto encabezado — izquierda
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12);
   doc.setTextColor(...NAVY);
   doc.text("SYNC MSC", 15, 14);
-
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
   doc.setTextColor(...HDR_TOP);
   doc.text("Sistema de Gestión de Mantenimiento", 15, 20);
   doc.text("Informe de Cierre de Orden de Trabajo", 15, 25.5);
 
-  // OT number destacado — derecha
   doc.setFont("helvetica", "bold");
   doc.setFontSize(15);
   doc.setTextColor(...NAVY);
   doc.text(`OT ${numOT}`, PW - 15, 15, { align: "right" });
-
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7.5);
   doc.setTextColor(...HDR_TOP);
   doc.text(fmt(ot.fecha), PW - 15, 21, { align: "right" });
-
-  // Estado badge
   estadoBadge(doc, ot.estado, PW - 30, 27);
 
   y = 38;
@@ -211,12 +235,10 @@ export function generarInformeOT(ot: OTData): void {
       ["Estado", ESTADO_LABEL[ot.estado] ?? ot.estado, "Fecha revisión", fechaRevision],
     ],
     didParseCell: (data) => {
-      if (data.row.index % 2 === 0 && data.section === "body") {
+      if (data.row.index % 2 === 0 && data.section === "body")
         data.cell.styles.fillColor = GRIS_L;
-      }
     },
   });
-
   y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
 
   // ── 2. EQUIPOS INTERVENIDOS ─────────────────────────────────────────────────
@@ -230,7 +252,6 @@ export function generarInformeOT(ot: OTData): void {
     doc.setTextColor(...AZUL);
     doc.text("Trabajos Correctivos (CMP / CMR)", 15, y);
     y += 4;
-
     autoTable(doc, {
       startY: y,
       margin: { left: 15, right: 15 },
@@ -267,7 +288,6 @@ export function generarInformeOT(ot: OTData): void {
     doc.setTextColor(...AZUL);
     doc.text("Trabajos Preventivos / Predictivos", 15, y);
     y += 4;
-
     autoTable(doc, {
       startY: y,
       margin: { left: 15, right: 15 },
@@ -293,7 +313,7 @@ export function generarInformeOT(ot: OTData): void {
     y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 5;
   }
 
-  // ── 3. SUPERVISIÓN (solo si hay correctivos y datos) ────────────────────────
+  // ── 3. SUPERVISIÓN ──────────────────────────────────────────────────────────
   const ds = ot.datosSupervision ?? {};
   const comentarios = (ds.comentariosSupervisor ?? "").split("\n").filter(Boolean);
   const hayDatosSupervision = tieneCorrectivos && (ds.requierePlanificacion || comentarios.length > 0);
@@ -305,11 +325,9 @@ export function generarInformeOT(ot: OTData): void {
 
     const supRows: [string, string][] = [];
     supRows.push(["Requiere WR", ds.requierePlanificacion ? "Sí" : "No"]);
-    if (comentarios.length > 0) {
-      comentarios.forEach((c, i) => {
-        supRows.push([i === 0 ? "Comentarios del Supervisor" : "", c]);
-      });
-    }
+    comentarios.forEach((c, i) => {
+      supRows.push([i === 0 ? "Comentarios del Supervisor" : "", c]);
+    });
 
     autoTable(doc, {
       startY: y,
@@ -322,9 +340,8 @@ export function generarInformeOT(ot: OTData): void {
       },
       body: supRows,
       didParseCell: (data) => {
-        if (data.row.index % 2 === 0 && data.section === "body") {
+        if (data.row.index % 2 === 0 && data.section === "body")
           data.cell.styles.fillColor = GRIS_L;
-        }
       },
     });
     y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
@@ -369,92 +386,122 @@ export function generarInformeOT(ot: OTData): void {
 
   y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
 
-  // ── 5. EVIDENCIAS (fotos y documentos) ─────────────────────────────────────
+  // ── 5. EVIDENCIAS — siempre empieza en página nueva ─────────────────────────
   if (todosAdjuntos.length > 0) {
     secNum = hayDatosSupervision ? 5 : 4;
-    y = checkPage(doc, y, 30);
+
+    // Forzar nueva página para la sección de evidencias
+    doc.addPage();
+    y = 20;
+
     seccion(doc, `${secNum}. Evidencias Fotográficas y Documentos`, y, PW);
     y += 14;
 
     // ── Fotos ──────────────────────────────────────────────────────────────
     if (fotos.length > 0) {
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(7.5);
+      doc.setFontSize(8);
       doc.setTextColor(...AZUL);
-      doc.text("Fotos / Imágenes", 15, y);
-      y += 5;
+      doc.text(`Registro fotográfico — ${fotos.length} imagen${fotos.length > 1 ? "es" : ""}`, 15, y);
+      y += 7;
 
-      const IMG_W = 52;
-      const IMG_H = 40;
-      const GAP   = 6;
-      const COLS  = 3;
-      const COL_W = IMG_W + GAP;
+      // Layout: 2 fotos por fila (más espacio para cada una y sus observaciones)
+      const COLS    = 2;
+      const MARGIN  = 15;
+      const GAP     = 8;
+      const COL_W   = (PW - MARGIN * 2 - GAP * (COLS - 1)) / COLS; // ~84mm cada col
+      const MAX_H   = 65; // altura máxima por foto en mm
+      const OBS_H   = 28; // espacio para observaciones debajo de la foto
 
       for (let i = 0; i < fotos.length; i++) {
-        const col = i % COLS;
-        const xImg = 15 + col * COL_W;
+        const col  = i % COLS;
+        const xImg = MARGIN + col * (COL_W + GAP);
 
-        if (col === 0 && i > 0) y += IMG_H + 22;
-        y = checkPage(doc, y, IMG_H + 22);
+        // Nueva fila: salto de Y
+        if (col === 0 && i > 0) {
+          y += MAX_H + OBS_H + 8;
+        }
+        y = checkPage(doc, y, MAX_H + OBS_H + 10);
 
-        const adj = fotos[i];
+        const adj  = fotos[i];
+        const size = fotoSizes[i] ?? { w: 4, h: 3 };
 
-        // Imagen
+        // Calcular dimensiones manteniendo proporción, sin superar COL_W ni MAX_H
+        let imgW = COL_W;
+        let imgH = (imgW * size.h) / size.w;
+        if (imgH > MAX_H) {
+          imgH = MAX_H;
+          imgW = (imgH * size.w) / size.h;
+        }
+        // Centrar horizontalmente dentro de la columna
+        const xCentered = xImg + (COL_W - imgW) / 2;
+
+        // Marco exterior (borde gris claro)
+        doc.setDrawColor(...BORDE);
+        doc.setLineWidth(0.5);
+        doc.rect(xCentered - 1, y - 1, imgW + 2, imgH + 2, "S");
+
+        // Imagen con proporciones correctas
         try {
           const ext = adj.dataUrl.startsWith("data:image/png") ? "PNG" : "JPEG";
-          doc.addImage(adj.dataUrl, ext, xImg, y, IMG_W, IMG_H);
+          doc.addImage(adj.dataUrl, ext, xCentered, y, imgW, imgH);
         } catch {
-          // Si falla la imagen, dibujar placeholder
           doc.setFillColor(...GRIS_L);
-          doc.rect(xImg, y, IMG_W, IMG_H, "F");
+          doc.rect(xCentered, y, imgW, imgH, "F");
           doc.setFontSize(7);
           doc.setTextColor(...GRIS);
-          doc.text("[imagen no disponible]", xImg + IMG_W / 2, y + IMG_H / 2, { align: "center" });
+          doc.text("[imagen no disponible]", xCentered + imgW / 2, y + imgH / 2, { align: "center" });
         }
 
-        // Nombre del archivo + TAG
+        // Área de observaciones — fondo gris muy claro
+        const yObs = y + imgH + 3;
+        doc.setFillColor(248, 250, 252);
+        doc.rect(xImg, yObs, COL_W, OBS_H - 4, "F");
+        doc.setDrawColor(...BORDE);
+        doc.setLineWidth(0.3);
+        doc.rect(xImg, yObs, COL_W, OBS_H - 4, "S");
+
+        // TAG del equipo
         doc.setFont("helvetica", "bold");
         doc.setFontSize(6.5);
         doc.setTextColor(...NAVY);
-        doc.text(`TAG: ${adj.tag}`, xImg, y + IMG_H + 3.5);
+        doc.text(`TAG: ${adj.tag}`, xImg + 2, yObs + 4);
 
-        // Comentario principal
-        const comentarioTexto = adj.comentario || "Sin comentario";
-        doc.setFont("helvetica", "normal");
+        // Etiqueta "Observaciones:"
+        doc.setFont("helvetica", "bold");
         doc.setFontSize(6);
-        doc.setTextColor(...NEGRO);
-        const lineasComentario = doc.splitTextToSize(comentarioTexto, IMG_W);
-        doc.text(lineasComentario.slice(0, 2), xImg, y + IMG_H + 7);
+        doc.setTextColor(...GRIS);
+        doc.text("Observaciones:", xImg + 2, yObs + 8.5);
 
-        // Comentarios extra
-        if (adj.comentariosExtra?.length > 0) {
-          doc.setTextColor(...GRIS);
-          adj.comentariosExtra.slice(0, 2).forEach((ce, ci) => {
-            const lineasExtra = doc.splitTextToSize(`• ${ce}`, IMG_W);
-            doc.text(lineasExtra[0], xImg, y + IMG_H + 11 + ci * 4);
-          });
-        }
+        // Texto del comentario principal
+        const todosComentarios = [adj.comentario, ...(adj.comentariosExtra ?? [])].filter(Boolean);
+        const textoObs = todosComentarios.join(" · ") || "Sin observaciones";
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(6.5);
+        doc.setTextColor(...NEGRO);
+        const lineasObs = doc.splitTextToSize(textoObs, COL_W - 4);
+        doc.text(lineasObs.slice(0, 3), xImg + 2, yObs + 13);
       }
 
-      // Avanzar y después del último bloque de fotos
+      // Avanzar Y tras la última fila de fotos
       const lastCol = (fotos.length - 1) % COLS;
-      if (lastCol >= 0) y += IMG_H + 22;
-      y += 4;
+      void lastCol; // la y ya apunta al inicio de la última fila
+      y += MAX_H + OBS_H + 6;
     }
 
     // ── Documentos ─────────────────────────────────────────────────────────
     if (documentos.length > 0) {
       y = checkPage(doc, y, 20);
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(7.5);
+      doc.setFontSize(8);
       doc.setTextColor(...AZUL);
-      doc.text("Documentos adjuntos", 15, y);
-      y += 5;
+      doc.text(`Documentos adjuntos — ${documentos.length}`, 15, y);
+      y += 6;
 
       autoTable(doc, {
         startY: y,
         margin: { left: 15, right: 15 },
-        head: [["TAG", "Archivo", "Comentario"]],
+        head: [["TAG", "Archivo", "Observaciones"]],
         body: documentos.map(d => [
           d.tag,
           d.nombre,
@@ -465,62 +512,15 @@ export function generarInformeOT(ot: OTData): void {
         alternateRowStyles: { fillColor: GRIS_L },
         columnStyles: {
           0: { cellWidth: 25, fontStyle: "bold" },
-          1: { cellWidth: 55 },
+          1: { cellWidth: 60 },
           2: {},
         },
       });
-      y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
     }
   }
 
-  // ── Firma / sello ─────────────────────────────────────────────────────────
-  y = checkPage(doc, y, 28);
-  const midX = PW / 2;
-
-  doc.setDrawColor(200, 210, 220);
-  doc.setLineWidth(0.3);
-  doc.line(30, y + 16, midX - 8, y + 16);
-  doc.line(midX + 8, y + 16, PW - 30, y + 16);
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(7);
-  doc.setTextColor(...GRIS);
-  doc.text("Técnico Responsable", (30 + midX - 8) / 2, y + 20, { align: "center" });
-  doc.text("Supervisor / Revisor", (midX + 8 + PW - 30) / 2, y + 20, { align: "center" });
-
-  if (tecnicos !== "—") {
-    doc.setFontSize(7.5);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(...NEGRO);
-    doc.text(tecnicos.split(",")[0].trim(), (30 + midX - 8) / 2, y + 25, { align: "center" });
-  }
-  if (sup !== "—") {
-    doc.setFontSize(7.5);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(...NEGRO);
-    doc.text(sup, (midX + 8 + PW - 30) / 2, y + 25, { align: "center" });
-  }
-
-  // ── Pie de página ──────────────────────────────────────────────────────────
-  const totalPages = doc.getNumberOfPages();
-  for (let i = 1; i <= totalPages; i++) {
-    doc.setPage(i);
-    const PH = doc.internal.pageSize.getHeight();
-    doc.setFillColor(...NAVY);
-    doc.rect(0, PH - 10, PW, 10, "F");
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(6.5);
-    doc.setTextColor(...BLANCO);
-    doc.text(`SYNC MSC · Informe de Cierre OT ${numOT} · Generado ${new Date().toLocaleDateString("es-BO")}`, 15, PH - 3.5);
-    doc.text(`Pág. ${i} / ${totalPages}`, PW - 15, PH - 3.5, { align: "right" });
-  }
+  // ── Pie de página en todas las páginas (sin firmas) ──────────────────────────
+  piePagina(doc, numOT);
 
   doc.save(`Informe_OT_${numOT}_${new Date().toISOString().slice(0, 10)}.pdf`);
-}
-
-// ── Verificar salto de página ──────────────────────────────────────────────────
-function checkPage(doc: jsPDF, y: number, espacio: number): number {
-  const PH = doc.internal.pageSize.getHeight();
-  if (y + espacio > PH - 18) { doc.addPage(); return 20; }
-  return y;
 }
