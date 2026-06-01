@@ -83,6 +83,12 @@ function detectarAreaProceso(descripcionArea?: string): string {
 
 type BitacoraEntry = { turno: string; supervisor: string; nota: string; hhAtendidas: number; fecha?: string };
 
+type OTDetalle = {
+  _id: string; numeroOT: string; estado: string; turno: string;
+  tecnicos: { nombreCompleto: string }[];
+  lineas: { tag: string; tipoOT: string; descripcionEquipo?: string; sintoma?: string; resolucionAplicada?: string; descripcionTrabajo?: string; tiempoRealHrs?: number }[];
+};
+
 type OTPlan = {
   numeroOT: string; tipoOT: string; tipoTrabajo: string;
   descripcion: string; tag: string; descripcionEquipo?: string;
@@ -869,6 +875,21 @@ export default function RegistroOTPage() {
   const [done, setDone] = useState(false);
   const [doneOT, setDoneOT] = useState<{ numeroOT: string; estado: string } | null>(null);
 
+  // ── Detalle OTs ya registradas ──
+  const [otDetalles, setOtDetalles] = useState<Record<string, OTDetalle | null>>({});
+
+  async function cargarOtDetalle(ordenTrabajoId: string) {
+    if (ordenTrabajoId in otDetalles) return;
+    setOtDetalles(prev => ({ ...prev, [ordenTrabajoId]: null }));
+    try {
+      const res = await fetch(`/api/ordenes/${ordenTrabajoId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setOtDetalles(prev => ({ ...prev, [ordenTrabajoId]: { _id: data._id, numeroOT: data.numeroOT, estado: data.estado, turno: data.turno, tecnicos: data.tecnicos ?? [], lineas: data.lineas ?? [] } }));
+      }
+    } catch { /* ignore */ }
+  }
+
   // ── Bitácora Guardia ──
   const [guardiaRef, setGuardiaRef] = useState<PlanRef | null>(null);
   const [guardiaNota, setGuardiaNota] = useState("");
@@ -1266,9 +1287,16 @@ export default function RegistroOTPage() {
                           )
                         ) : yaRegistrada ? (
                           <button
-                            onClick={() => router.push("/ordenes/reporte")}
+                            onClick={() => {
+                              if (!ot.ordenTrabajoId) return;
+                              if (ot.ordenTrabajoId in otDetalles) {
+                                setOtDetalles(prev => { const n = { ...prev }; delete n[ot.ordenTrabajoId!]; return n; });
+                              } else {
+                                cargarOtDetalle(ot.ordenTrabajoId);
+                              }
+                            }}
                             style={{ fontSize: 12, color: "#16a34a", background: "none", border: "none", cursor: "pointer", fontWeight: 700 }}>
-                            #{ot.ordenTrabajoNum} Ver →
+                            #{ot.ordenTrabajoNum} {ot.ordenTrabajoId && ot.ordenTrabajoId in otDetalles ? "▲ Ocultar" : "▼ Ver detalles"}
                           </button>
                         ) : ot.pasarNoche ? (
                           <span style={{ fontSize: 11, fontWeight: 700, color: "#7c3aed", background: "#ede9fe", border: "1px solid #c4b5fd", borderRadius: 6, padding: "4px 10px" }}>
@@ -1291,6 +1319,43 @@ export default function RegistroOTPage() {
                         )}
                       </div>
                     </div>
+
+                    {/* ── Detalle OT ya registrada (OTs regulares del plan) ── */}
+                    {!esGuardia && yaRegistrada && ot.ordenTrabajoId && ot.ordenTrabajoId in otDetalles && (() => {
+                      const det = otDetalles[ot.ordenTrabajoId];
+                      if (!det) return <div style={{ padding: "10px 0", fontSize: 12, color: "#94a3b8" }}>Cargando…</div>;
+                      const hhTotal = det.lineas.reduce((s, l) => s + (l.tiempoRealHrs ?? 0), 0);
+                      return (
+                        <div style={{ marginTop: 10, borderTop: "1px solid #d1fae5", paddingTop: 10 }}>
+                          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 8 }}>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: "#16a34a" }}>✓ OT registrada</span>
+                            <span style={{ fontSize: 11, color: "#64748b" }}>{det.turno}</span>
+                            {hhTotal > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: "#d97706" }}>{Math.round(hhTotal * 10) / 10} HH reales</span>}
+                            <span style={{ fontSize: 11, color: "#64748b" }}>{det.tecnicos.map(t => t.nombreCompleto).join(", ")}</span>
+                          </div>
+                          {det.lineas.map((l, li) => (
+                            <div key={li} style={{ background: "#f0fdf4", borderRadius: 8, border: "1px solid #bbf7d0", padding: "8px 10px", marginBottom: 6 }}>
+                              <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 3 }}>
+                                <span style={{ fontSize: 11, fontWeight: 800, color: TIPO_COLOR[l.tipoOT as TipoOT] ?? "#64748b", fontFamily: "monospace" }}>{l.tipoOT}</span>
+                                <span style={{ fontSize: 11, fontWeight: 700, color: "#1d4ed8", fontFamily: "monospace" }}>{l.tag}</span>
+                                {l.descripcionEquipo && <span style={{ fontSize: 11, color: "#64748b" }}>{l.descripcionEquipo}</span>}
+                              </div>
+                              {l.sintoma && <p style={{ fontSize: 11, color: "#475569", fontStyle: "italic", marginBottom: 2 }}>Síntoma: {l.sintoma}</p>}
+                              {l.descripcionTrabajo && <p style={{ fontSize: 11, color: "#475569", marginBottom: 2 }}>{l.descripcionTrabajo}</p>}
+                              {l.resolucionAplicada && <p style={{ fontSize: 11, color: "#16a34a" }}>✓ {l.resolucionAplicada}</p>}
+                            </div>
+                          ))}
+                          <button onClick={() => router.push("/ordenes/reporte")}
+                            style={{ fontSize: 12, color: "#2563eb", background: "none", border: "none", cursor: "pointer", fontWeight: 600, padding: 0 }}>
+                            Ver OT completa en reporte →
+                          </button>
+                          <button onClick={() => setOtDetalles(prev => { const n = { ...prev }; delete n[ot.ordenTrabajoId!]; return n; })}
+                            style={{ fontSize: 11, color: "#94a3b8", background: "none", border: "none", cursor: "pointer", marginLeft: 12 }}>
+                            Ocultar
+                          </button>
+                        </div>
+                      );
+                    })()}
 
                     {/* ── Modal Bitácora Guardia ── */}
                     {guardiaRef?.planId === ref.planId && guardiaRef?.ot.numeroOT === ot.numeroOT && (
