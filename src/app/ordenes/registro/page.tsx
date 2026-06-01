@@ -31,7 +31,8 @@ type AdjuntoItem = {
   tipo: "foto" | "documento";
   nombre: string;
   dataUrl: string;
-  comentario: string;
+  comentario: string;          // comentario principal obligatorio
+  comentariosExtra: string[];  // comentarios adicionales
 };
 
 type LineaForm = {
@@ -486,6 +487,91 @@ function aplicaChecklist(nivel: number, disciplina: string, tipoOT: TipoOT | "")
   return false;
 }
 
+// ─── AdjuntoCard ─────────────────────────────────────────────────────────────
+
+function AdjuntoCard({ adj, onChange, onRemove }: {
+  adj: AdjuntoItem;
+  onChange: (updated: AdjuntoItem) => void;
+  onRemove: () => void;
+}) {
+  const [inputExtra, setInputExtra] = useState("");
+
+  function agregarExtra() {
+    const txt = inputExtra.trim();
+    if (!txt) return;
+    onChange({ ...adj, comentariosExtra: [...adj.comentariosExtra, txt] });
+    setInputExtra("");
+  }
+
+  return (
+    <div style={{ background: "#f8fafc", border: adj.comentario.trim() ? "1px solid #e2e8f0" : "1px solid #fca5a5", borderRadius: 8, padding: "10px 12px", marginBottom: 8 }}>
+      <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+        {/* Miniatura */}
+        {adj.tipo === "foto" ? (
+          <img src={adj.dataUrl} alt={adj.nombre}
+            style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 6, flexShrink: 0, border: "1px solid #e2e8f0" }} />
+        ) : (
+          <div style={{ width: 60, height: 60, background: "#f1f5f9", borderRadius: 6, display: "flex", flexDirection: "column" as const, alignItems: "center", justifyContent: "center", flexShrink: 0, border: "1px solid #e2e8f0" }}>
+            <span style={{ fontSize: 20 }}>📄</span>
+            <span style={{ fontSize: 9, color: "#64748b", textAlign: "center" as const, padding: "0 4px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const, maxWidth: 56 }}>{adj.nombre.split(".").pop()?.toUpperCase()}</span>
+          </div>
+        )}
+
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {/* Nombre archivo */}
+          <div style={{ fontSize: 11, color: "#64748b", marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{adj.nombre}</div>
+
+          {/* Comentario principal obligatorio */}
+          <input
+            value={adj.comentario}
+            onChange={e => onChange({ ...adj, comentario: e.target.value })}
+            placeholder={`Comentario obligatorio sobre ${adj.tipo === "foto" ? "la foto" : "el documento"}…`}
+            style={{ ...S.input, fontSize: 12, borderColor: adj.comentario.trim() ? "#cbd5e1" : "#fca5a5", background: adj.comentario.trim() ? "white" : "#fff5f5" }}
+          />
+          {!adj.comentario.trim() && (
+            <p style={{ fontSize: 11, color: "#dc2626", marginTop: 3 }}>⚠ Comentario requerido para confirmar</p>
+          )}
+
+          {/* Comentarios adicionales ya agregados */}
+          {adj.comentariosExtra.length > 0 && (
+            <div style={{ marginTop: 6, display: "flex", flexDirection: "column" as const, gap: 4 }}>
+              {adj.comentariosExtra.map((c, ci) => (
+                <div key={ci} style={{ display: "flex", alignItems: "flex-start", gap: 6, background: "#f1f5f9", borderRadius: 6, padding: "5px 8px", border: "1px solid #e2e8f0" }}>
+                  <span style={{ flex: 1, fontSize: 12, color: "#334155", lineHeight: 1.4 }}>{c}</span>
+                  <button type="button"
+                    onClick={() => onChange({ ...adj, comentariosExtra: adj.comentariosExtra.filter((_, j) => j !== ci) })}
+                    style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: 13, lineHeight: 1, flexShrink: 0 }}>✕</button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Input para agregar comentario adicional */}
+          <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+            <input
+              value={inputExtra}
+              onChange={e => setInputExtra(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); agregarExtra(); } }}
+              placeholder="Agregar observación — Enter para confirmar"
+              style={{ ...S.input, fontSize: 12, flex: 1 }}
+            />
+            <button type="button" onClick={agregarExtra}
+              style={{ ...S.btnOutline, padding: "8px 12px", fontSize: 12, whiteSpace: "nowrap" as const }}>
+              + Agregar
+            </button>
+          </div>
+        </div>
+
+        {/* Botón eliminar adjunto */}
+        <button type="button" onClick={onRemove}
+          style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 16, paddingTop: 2, flexShrink: 0 }}>✕</button>
+      </div>
+    </div>
+  );
+}
+
+// ─── LineaEditor ─────────────────────────────────────────────────────────────
+
 function LineaEditor({
   linea, area, isNew, soloCorrectivos, onConfirm, onCancel,
 }: {
@@ -874,37 +960,15 @@ function LineaEditor({
 
           {/* Lista de adjuntos ya agregados */}
           {L.adjuntos.map((adj, i) => (
-            <div key={adj.id} style={{ background: "#f8fafc", border: adj.comentario.trim() ? "1px solid #e2e8f0" : "1px solid #fca5a5", borderRadius: 8, padding: "10px 12px", marginBottom: 8 }}>
-              <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-                {adj.tipo === "foto" ? (
-                  <img src={adj.dataUrl} alt={adj.nombre}
-                    style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 6, flexShrink: 0, border: "1px solid #e2e8f0" }} />
-                ) : (
-                  <div style={{ width: 60, height: 60, background: "#f1f5f9", borderRadius: 6, display: "flex", flexDirection: "column" as const, alignItems: "center", justifyContent: "center", flexShrink: 0, border: "1px solid #e2e8f0" }}>
-                    <span style={{ fontSize: 20 }}>📄</span>
-                    <span style={{ fontSize: 9, color: "#64748b", textAlign: "center" as const, padding: "0 4px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const, maxWidth: 56 }}>{adj.nombre.split(".").pop()?.toUpperCase()}</span>
-                  </div>
-                )}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 11, color: "#64748b", marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{adj.nombre}</div>
-                  <input
-                    value={adj.comentario}
-                    onChange={e => {
-                      const upd = [...L.adjuntos];
-                      upd[i] = { ...upd[i], comentario: e.target.value };
-                      patch({ adjuntos: upd });
-                    }}
-                    placeholder={`Comentario obligatorio sobre ${adj.tipo === "foto" ? "la foto" : "el documento"}…`}
-                    style={{ ...S.input, fontSize: 12, borderColor: adj.comentario.trim() ? "#cbd5e1" : "#fca5a5", background: adj.comentario.trim() ? "white" : "#fff5f5" }}
-                  />
-                  {!adj.comentario.trim() && (
-                    <p style={{ fontSize: 11, color: "#dc2626", marginTop: 3 }}>⚠ Comentario requerido para confirmar</p>
-                  )}
-                </div>
-                <button type="button" onClick={() => patch({ adjuntos: L.adjuntos.filter((_, j) => j !== i) })}
-                  style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 16, paddingTop: 2, flexShrink: 0 }}>✕</button>
-              </div>
-            </div>
+            <AdjuntoCard key={adj.id}
+              adj={adj}
+              onChange={updated => {
+                const upd = [...L.adjuntos];
+                upd[i] = updated;
+                patch({ adjuntos: upd });
+              }}
+              onRemove={() => patch({ adjuntos: L.adjuntos.filter((_, j) => j !== i) })}
+            />
           ))}
 
           {/* Botones para agregar */}
@@ -921,7 +985,7 @@ function LineaEditor({
                   setCargandoAdj(true);
                   try {
                     const dataUrl = await comprimirImagen(file);
-                    patch({ adjuntos: [...L.adjuntos, { id: Math.random().toString(36).slice(2), tipo: "foto", nombre: file.name, dataUrl, comentario: "" }] });
+                    patch({ adjuntos: [...L.adjuntos, { id: Math.random().toString(36).slice(2), tipo: "foto", nombre: file.name, dataUrl, comentario: "", comentariosExtra: [] }] });
                   } finally { setCargandoAdj(false); e.target.value = ""; }
                 }} />
             </label>
@@ -938,7 +1002,7 @@ function LineaEditor({
                   setCargandoAdj(true);
                   try {
                     const dataUrl = await comprimirImagen(file);
-                    patch({ adjuntos: [...L.adjuntos, { id: Math.random().toString(36).slice(2), tipo: "foto", nombre: file.name, dataUrl, comentario: "" }] });
+                    patch({ adjuntos: [...L.adjuntos, { id: Math.random().toString(36).slice(2), tipo: "foto", nombre: file.name, dataUrl, comentario: "", comentariosExtra: [] }] });
                   } finally { setCargandoAdj(false); e.target.value = ""; }
                 }} />
             </label>
@@ -955,7 +1019,7 @@ function LineaEditor({
                   setCargandoAdj(true);
                   try {
                     const dataUrl = await leerDocumento(file);
-                    patch({ adjuntos: [...L.adjuntos, { id: Math.random().toString(36).slice(2), tipo: "documento", nombre: file.name, dataUrl, comentario: "" }] });
+                    patch({ adjuntos: [...L.adjuntos, { id: Math.random().toString(36).slice(2), tipo: "documento", nombre: file.name, dataUrl, comentario: "", comentariosExtra: [] }] });
                   } finally { setCargandoAdj(false); e.target.value = ""; }
                 }} />
             </label>
@@ -1221,7 +1285,7 @@ export default function RegistroOTPage() {
         ...(form.origenPlan ? { programacionSemanalId: form.programacionSemanalId, otJdeNumero: form.otJdeNumero, otJdeDia: form.otJdeDia } : { ...(form.otJdeNumero ? { otJdeNumero: form.otJdeNumero } : {}) }),
         lineas: form.lineas.map(l => ({
           tag: l.tag, descripcionEquipo: l.descripcionEquipo, tipoOT: l.tipoOT,
-          adjuntos: l.adjuntos.map(a => ({ tipo: a.tipo, nombre: a.nombre, dataUrl: a.dataUrl, comentario: a.comentario })),
+          adjuntos: l.adjuntos.map(a => ({ tipo: a.tipo, nombre: a.nombre, dataUrl: a.dataUrl, comentario: a.comentario, comentariosExtra: a.comentariosExtra })),
           ...(isCorrectivo(l.tipoOT) ? {
             sintoma: l.sintoma || undefined, causaProbable: l.causaProbable || undefined,
             resolucionAplicada: l.resolucionAplicada || undefined,

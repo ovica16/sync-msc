@@ -1,7 +1,7 @@
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 
-// ── Tipos mínimos necesarios ──────────────────────────────────────────────────
+// ── Tipos ─────────────────────────────────────────────────────────────────────
 interface LineaOT {
   tag: string;
   descripcionEquipo: string;
@@ -17,13 +17,15 @@ interface LineaOT {
 }
 
 interface DatosSupervision {
+  requierePlanificacion?: boolean;
+  comentariosSupervisor?: string;
+  revisadoPor?: string;
+  revisadoEn?: string;
+  // Legacy — no se muestran pero se mantienen para compatibilidad
   codigoModoFallaISO?: string;
   clasificacionRCM?: string;
   criticidadEquipo?: string;
   leccionAprendida?: string;
-  comentariosSupervisor?: string;
-  revisadoPor?: string;
-  revisadoEn?: string;
 }
 
 interface TecnicoRef { nombreCompleto: string }
@@ -47,13 +49,23 @@ interface OTData {
   historialCambios?: CambioHistorial[];
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Paleta ────────────────────────────────────────────────────────────────────
+const NAVY   = [13, 47, 94]    as [number, number, number]; // #0d2f5e — igual al certificado
+const AZUL   = [37, 99, 235]   as [number, number, number]; // #2563eb
+const GRIS   = [107, 114, 128] as [number, number, number]; // #6b7280
+const GRIS_L = [241, 245, 249] as [number, number, number]; // #f1f5f9
+const BLANCO = [255, 255, 255] as [number, number, number];
+const NEGRO  = [17, 24, 39]    as [number, number, number]; // #111827
+const VERDE  = [22, 163, 74]   as [number, number, number]; // #16a34a
+const ROJO   = [220, 38, 38]   as [number, number, number]; // #dc2626
+
+// ── Labels ────────────────────────────────────────────────────────────────────
 const TIPO_OT_LABEL: Record<string, string> = {
   CMP: "Correctivo Mayor Programado",
   CMR: "Correctivo Menor Rutinario",
   PMP: "Preventivo Mayor Programado",
-  PMT: "Preventivo Menor/Tarea",
-  PTJ: "Predictivo",
+  PMT: "Preventivo Menor / Tarea",
+  PTJ: "Predictivo / Inspección",
 };
 
 const ESTADO_LABEL: Record<string, string> = {
@@ -64,266 +76,341 @@ const ESTADO_LABEL: Record<string, string> = {
   concluido: "Concluido",
 };
 
+const ESTADO_COLOR: Record<string, [number, number, number]> = {
+  concluido: VERDE,
+  revisado: AZUL,
+  pendiente_revision: [217, 119, 6],
+  solicitar_correccion: ROJO,
+  borrador: GRIS,
+};
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 function fmt(d?: string | Date) {
   if (!d) return "—";
-  return new Date(d).toLocaleDateString("es-CL", { day: "2-digit", month: "2-digit", year: "numeric" });
+  return new Date(d).toLocaleDateString("es-BO", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
 function fmtHrs(n?: number) {
-  if (n == null) return "—";
+  if (n == null || n === 0) return "—";
   return `${n} h`;
 }
 
-// ── Paleta de colores SYNC MSC ────────────────────────────────────────────────
-const AZUL   = [13, 40, 71]   as [number, number, number]; // #0d2847
-const AZUL2  = [37, 99, 235]  as [number, number, number]; // #2563eb
-const GRIS   = [100, 116, 139] as [number, number, number];
-const BLANCO = [255, 255, 255] as [number, number, number];
-const CELDA  = [239, 246, 255] as [number, number, number]; // #eff6ff
+// ── Encabezado de sección — barra vertical + línea (estilo certificado) ───────
+function seccion(doc: jsPDF, texto: string, y: number, PW: number): void {
+  // Barra vertical azul navy
+  doc.setFillColor(...NAVY);
+  doc.rect(15, y, 2.5, 11, "F");
+  // Texto
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+  doc.setTextColor(...NAVY);
+  doc.text(texto.toUpperCase(), 20, y + 7.5);
+  // Línea horizontal
+  const textW = doc.getTextWidth(texto.toUpperCase());
+  doc.setDrawColor(226, 232, 240);
+  doc.setLineWidth(0.4);
+  doc.line(21 + textW, y + 7, PW - 15, y + 7);
+}
+
+// ── Badge de estado (pill) ────────────────────────────────────────────────────
+function estadoBadge(doc: jsPDF, estado: string, x: number, y: number) {
+  const label = ESTADO_LABEL[estado] ?? estado;
+  const color = ESTADO_COLOR[estado] ?? GRIS;
+  const w = doc.getTextWidth(label) + 8;
+  doc.setFillColor(...color);
+  doc.roundedRect(x - w / 2, y - 4, w, 7, 1.5, 1.5, "F");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7);
+  doc.setTextColor(...BLANCO);
+  doc.text(label, x, y + 0.5, { align: "center" });
+}
 
 // ── Generador principal ───────────────────────────────────────────────────────
 export function generarInformeOT(ot: OTData): void {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-  const PW = doc.internal.pageSize.getWidth();   // 210
-  const ancho = PW - 30; // márgenes 15 mm c/lado
-
+  const PW = doc.internal.pageSize.getWidth();
   let y = 15;
 
-  // ── Encabezado ────────────────────────────────────────────────────────────
-  doc.setFillColor(...AZUL);
-  doc.rect(0, 0, PW, 28, "F");
+  const numOT = ot.otJdeNumero ?? ot.numeroOT ?? "—";
+  const tecnicos = ot.tecnicos.map(t => t.nombreCompleto).join(", ") || "—";
+  const correctivos = ot.lineas.filter(l => ["CMP", "CMR"].includes(l.tipoOT));
+  const preventivos = ot.lineas.filter(l => !["CMP", "CMR"].includes(l.tipoOT));
+  const tieneCorrectivos = correctivos.length > 0;
 
+  const entradaRevision = (ot.historialCambios ?? [])
+    .slice().reverse()
+    .find(c => /aprobada|revisado|concluida/i.test(c.cambio));
+  const sup = ot.datosSupervision?.revisadoPor ?? entradaRevision?.nombreUsuario ?? "—";
+  const fechaRevision = ot.datosSupervision?.revisadoEn
+    ? fmt(ot.datosSupervision.revisadoEn)
+    : entradaRevision?.fechaHora ? fmt(entradaRevision.fechaHora) : "—";
+
+  // ── Encabezado ──────────────────────────────────────────────────────────────
+  // Franja superior navy
+  doc.setFillColor(...NAVY);
+  doc.rect(0, 0, PW, 26, "F");
+
+  // Línea de acento azul
+  doc.setFillColor(...AZUL);
+  doc.rect(0, 26, PW, 1.5, "F");
+
+  // Texto encabezado
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
+  doc.setFontSize(11);
   doc.setTextColor(...BLANCO);
-  doc.text("SYNC MSC", 15, 11);
+  doc.text("SYNC MSC", 15, 10);
 
   doc.setFont("helvetica", "normal");
-  doc.text("Sistema de Gestión de Mantenimiento", 15, 17);
-  const numOT = ot.otJdeNumero ?? ot.numeroOT ?? "—";
-  doc.text(`Informe de Cierre — OT #${numOT}`, 15, 23);
-
-  // Estado badge (esquina derecha)
-  doc.setFillColor(...AZUL2);
-  doc.roundedRect(PW - 55, 8, 40, 12, 2, 2, "F");
-  doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
+  doc.setTextColor(180, 200, 230);
+  doc.text("Sistema de Gestión de Mantenimiento", 15, 16);
+  doc.text("Informe de Cierre de Orden de Trabajo", 15, 21.5);
+
+  // OT number destacado (derecha)
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
   doc.setTextColor(...BLANCO);
-  doc.text(ESTADO_LABEL[ot.estado] ?? ot.estado, PW - 35, 15.5, { align: "center" });
+  doc.text(`OT ${numOT}`, PW - 15, 13, { align: "right" });
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7.5);
+  doc.setTextColor(160, 190, 225);
+  doc.text(fmt(ot.fecha), PW - 15, 19, { align: "right" });
+
+  // Estado badge
+  estadoBadge(doc, ot.estado, PW - 30, 24);
 
   y = 36;
 
-  // ── Sección 1: Datos Generales ────────────────────────────────────────────
-  seccionTitulo(doc, "1. DATOS GENERALES", y, PW);
-  y += 8;
-
-  const tecnicos = ot.tecnicos.map(t => t.nombreCompleto).join(", ");
-  // Nombre del supervisor: buscar en historial la entrada de aprobación
-  const entradaRevision = (ot.historialCambios ?? [])
-    .slice()
-    .reverse()
-    .find(c => c.cambio.toLowerCase().includes("aprobada") || c.cambio.toLowerCase().includes("revisado") || c.cambio.toLowerCase().includes("concluida"));
-  const sup = entradaRevision?.nombreUsuario ?? "—";
-  const fechaRevision = ot.datosSupervision?.revisadoEn
-    ? fmt(ot.datosSupervision.revisadoEn)
-    : entradaRevision?.fechaHora
-      ? fmt(entradaRevision.fechaHora)
-      : "—";
+  // ── 1. DATOS GENERALES ──────────────────────────────────────────────────────
+  seccion(doc, "1. Datos Generales", y, PW);
+  y += 14;
 
   autoTable(doc, {
     startY: y,
     margin: { left: 15, right: 15 },
     theme: "plain",
-    styles: { fontSize: 9, cellPadding: 2.5 },
+    styles: { fontSize: 8.5, cellPadding: { top: 2, bottom: 2, left: 3, right: 3 } },
     columnStyles: {
-      0: { fontStyle: "bold", textColor: GRIS, cellWidth: 45 },
-      1: { textColor: [30, 41, 59] },
-      2: { fontStyle: "bold", textColor: GRIS, cellWidth: 45 },
-      3: { textColor: [30, 41, 59] },
+      0: { fontStyle: "bold", textColor: GRIS, cellWidth: 42 },
+      1: { textColor: NEGRO },
+      2: { fontStyle: "bold", textColor: GRIS, cellWidth: 42 },
+      3: { textColor: NEGRO },
     },
     body: [
-      ["N° Orden de Trabajo", `OT-${numOT}`, "Fecha", fmt(ot.fecha)],
+      ["N° OT OPEPLANT", numOT, "Fecha", fmt(ot.fecha)],
       ["Turno", ot.turno, "Área", ot.areaCodigo],
-      ["Técnico(s)", tecnicos, "Revisado por", sup],
+      ["Técnico(s)", tecnicos || "—", "Revisado por", sup],
       ["Estado", ESTADO_LABEL[ot.estado] ?? ot.estado, "Fecha revisión", fechaRevision],
     ],
+    didParseCell: (data) => {
+      if (data.row.index % 2 === 0 && data.section === "body") {
+        data.cell.styles.fillColor = GRIS_L;
+      }
+    },
   });
 
-  y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6;
+  y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
 
-  // ── Sección 2: Equipos Intervenidos ───────────────────────────────────────
-  seccionTitulo(doc, "2. EQUIPOS INTERVENIDOS", y, PW);
-  y += 8;
-
-  const correctivos = ot.lineas.filter(l => ["CMP", "CMR"].includes(l.tipoOT));
-  const preventivos = ot.lineas.filter(l => !["CMP", "CMR"].includes(l.tipoOT));
+  // ── 2. EQUIPOS INTERVENIDOS ─────────────────────────────────────────────────
+  y = checkPage(doc, y, 35);
+  seccion(doc, "2. Equipos Intervenidos", y, PW);
+  y += 14;
 
   if (correctivos.length > 0) {
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(8.5);
-    doc.setTextColor(...AZUL2);
-    doc.text("Trabajos Correctivos", 15, y);
+    doc.setFontSize(7.5);
+    doc.setTextColor(...AZUL);
+    doc.text("Trabajos Correctivos (CMP / CMR)", 15, y);
     y += 4;
 
     autoTable(doc, {
       startY: y,
       margin: { left: 15, right: 15 },
-      head: [["TAG / Equipo", "Tipo OT", "Síntoma (Modo ISO)", "Causa Probable (MSC)", "Resolución Aplicada", "HH Est.", "HH Real"]],
+      head: [["TAG / Equipo", "Tipo", "Síntoma", "Causa Probable", "Resolución Aplicada", "HH Est.", "HH Real"]],
       body: correctivos.map(l => [
         `${l.tag}\n${l.descripcionEquipo}`,
-        TIPO_OT_LABEL[l.tipoOT] ?? l.tipoOT,
+        l.tipoOT,
         l.sintoma ?? "—",
         l.causaProbable ?? "—",
         l.resolucionAplicada ?? "—",
         fmtHrs(l.tiempoEstimadoHrs),
         fmtHrs(l.tiempoRealHrs),
       ]),
-      headStyles: { fillColor: AZUL, textColor: BLANCO, fontSize: 7.5, fontStyle: "bold", cellPadding: 3 },
-      bodyStyles: { fontSize: 8, cellPadding: 2.5, textColor: [30, 41, 59] },
-      alternateRowStyles: { fillColor: CELDA },
+      headStyles: { fillColor: NAVY, textColor: BLANCO, fontSize: 7, fontStyle: "bold", cellPadding: 2.5 },
+      bodyStyles: { fontSize: 7.5, cellPadding: 2.5, textColor: NEGRO },
+      alternateRowStyles: { fillColor: GRIS_L },
       columnStyles: {
-        0: { cellWidth: 32 },
-        1: { cellWidth: 28 },
+        0: { cellWidth: 30, fontStyle: "bold" },
+        1: { cellWidth: 14, halign: "center" },
         2: { cellWidth: 28 },
         3: { cellWidth: 28 },
         4: { cellWidth: 38 },
-        5: { cellWidth: 12, halign: "center" },
-        6: { cellWidth: 12, halign: "center" },
-      },
-      didParseCell: (data) => {
-        if (data.column.index === 0 && data.section === "body") {
-          data.cell.styles.fontStyle = "bold";
-        }
+        5: { cellWidth: 13, halign: "center" },
+        6: { cellWidth: 13, halign: "center" },
       },
     });
     y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 5;
   }
 
   if (preventivos.length > 0) {
-    verificarSaltoPage(doc, y, 30);
-    y = verificarSaltoPageY(doc, y, 30);
-
+    y = checkPage(doc, y, 30);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(8.5);
-    doc.setTextColor(...AZUL2);
+    doc.setFontSize(7.5);
+    doc.setTextColor(...AZUL);
     doc.text("Trabajos Preventivos / Predictivos", 15, y);
     y += 4;
 
     autoTable(doc, {
       startY: y,
       margin: { left: 15, right: 15 },
-      head: [["TAG / Equipo", "Tipo OT", "Descripción del Trabajo", "Tareas Ejecutadas", "HH Est.", "HH Real"]],
+      head: [["TAG / Equipo", "Tipo", "Descripción del Trabajo", "Tareas Ejecutadas", "HH Real"]],
       body: preventivos.map(l => [
         `${l.tag}\n${l.descripcionEquipo}`,
-        TIPO_OT_LABEL[l.tipoOT] ?? l.tipoOT,
+        l.tipoOT,
         l.descripcionTrabajo ?? "—",
         (l.tareasEjecutadas ?? []).join("\n") || "—",
-        fmtHrs(l.tiempoEstimadoHrs),
         fmtHrs(l.tiempoRealHrs),
       ]),
-      headStyles: { fillColor: AZUL, textColor: BLANCO, fontSize: 7.5, fontStyle: "bold", cellPadding: 3 },
-      bodyStyles: { fontSize: 8, cellPadding: 2.5, textColor: [30, 41, 59] },
-      alternateRowStyles: { fillColor: CELDA },
+      headStyles: { fillColor: NAVY, textColor: BLANCO, fontSize: 7, fontStyle: "bold", cellPadding: 2.5 },
+      bodyStyles: { fontSize: 7.5, cellPadding: 2.5, textColor: NEGRO },
+      alternateRowStyles: { fillColor: GRIS_L },
       columnStyles: {
-        0: { cellWidth: 32 },
-        1: { cellWidth: 25 },
-        2: { cellWidth: 40 },
-        3: { cellWidth: 40 },
-        5: { cellWidth: 12, halign: "center" },
-        6: { cellWidth: 12, halign: "center" },
+        0: { cellWidth: 32, fontStyle: "bold" },
+        1: { cellWidth: 14, halign: "center" },
+        2: { cellWidth: 50 },
+        3: { cellWidth: 50 },
+        4: { cellWidth: 18, halign: "center" },
       },
     });
     y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 5;
   }
 
-  // ── Sección 3: Análisis de Falla ISO 14224 ────────────────────────────────
-  y = verificarSaltoPageY(doc, y, 50);
-  seccionTitulo(doc, "3. ANÁLISIS DE FALLA — ISO 14224", y, PW);
-  y += 8;
-
+  // ── 3. SUPERVISIÓN (solo si hay correctivos) ────────────────────────────────
   const ds = ot.datosSupervision ?? {};
-  autoTable(doc, {
-    startY: y,
-    margin: { left: 15, right: 15 },
-    theme: "plain",
-    styles: { fontSize: 9, cellPadding: 2.5 },
-    columnStyles: {
-      0: { fontStyle: "bold", textColor: GRIS, cellWidth: 55 },
-      1: { textColor: [30, 41, 59] },
-    },
-    body: [
-      ["Modo de Falla ISO 14224", ds.codigoModoFallaISO ?? "—"],
-      ["Clasificación RCM", ds.clasificacionRCM ?? "—"],
-      ["Criticidad del Equipo", ds.criticidadEquipo ?? "—"],
-      ["¿Requiere planificación?", ds.comentariosSupervisor ? "Ver comentarios" : "—"],
-      ["Lección Aprendida", ds.leccionAprendida ?? "—"],
-      ["Comentarios del Supervisor", ds.comentariosSupervisor ?? "—"],
-    ],
-  });
-  y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6;
+  const comentarios = (ds.comentariosSupervisor ?? "").split("\n").filter(Boolean);
+  const hayDatosSupervision = tieneCorrectivos && (ds.requierePlanificacion || comentarios.length > 0);
 
-  // ── Sección 4: Resumen de HH ──────────────────────────────────────────────
-  y = verificarSaltoPageY(doc, y, 50);
-  seccionTitulo(doc, "4. RESUMEN DE HORAS-HOMBRE", y, PW);
-  y += 8;
+  if (hayDatosSupervision) {
+    y = checkPage(doc, y, 40);
+    seccion(doc, "3. Supervisión", y, PW);
+    y += 14;
+
+    const supRows: [string, string][] = [];
+    supRows.push(["Requiere WR", ds.requierePlanificacion ? "Sí" : "No"]);
+    if (comentarios.length > 0) {
+      comentarios.forEach((c, i) => {
+        supRows.push([i === 0 ? "Comentarios del Supervisor" : "", c]);
+      });
+    }
+
+    autoTable(doc, {
+      startY: y,
+      margin: { left: 15, right: 15 },
+      theme: "plain",
+      styles: { fontSize: 8.5, cellPadding: { top: 2.5, bottom: 2.5, left: 3, right: 3 } },
+      columnStyles: {
+        0: { fontStyle: "bold", textColor: GRIS, cellWidth: 55 },
+        1: { textColor: NEGRO },
+      },
+      body: supRows,
+      didParseCell: (data) => {
+        if (data.row.index % 2 === 0 && data.section === "body") {
+          data.cell.styles.fillColor = GRIS_L;
+        }
+      },
+    });
+    y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
+  }
+
+  // ── 4. RESUMEN HORAS-HOMBRE ─────────────────────────────────────────────────
+  y = checkPage(doc, y, 45);
+  const secNum = hayDatosSupervision ? "4" : "3";
+  seccion(doc, `${secNum}. Resumen de Horas-Hombre`, y, PW);
+  y += 14;
 
   const totalEst  = ot.lineas.reduce((s, l) => s + (l.tiempoEstimadoHrs ?? 0), 0);
   const totalReal = ot.lineas.reduce((s, l) => s + (l.tiempoRealHrs ?? 0), 0);
-  const diff      = totalReal - totalEst;
+  const diff      = Math.round((totalReal - totalEst) * 10) / 10;
   const pct       = totalEst > 0 ? Math.round((totalReal / totalEst) * 100) : 0;
 
   autoTable(doc, {
     startY: y,
-    margin: { left: 15, right: 15 },
+    margin: { left: 15, right: 80 }, // tabla angosta centrada
     head: [["Concepto", "Valor"]],
     body: [
-      ["HH Estimadas (total)", `${totalEst} h`],
-      ["HH Reales (total)", `${totalReal} h`],
-      ["Diferencia", `${diff >= 0 ? "+" : ""}${diff} h`],
-      ["Eficiencia (Est. vs Real)", `${pct}%`],
+      ["HH Estimadas (total)", totalEst > 0 ? `${totalEst} h` : "—"],
+      ["HH Reales (total)", totalReal > 0 ? `${totalReal} h` : "—"],
+      ["Diferencia", totalEst > 0 ? `${diff >= 0 ? "+" : ""}${diff} h` : "—"],
+      ["Eficiencia (Est. vs Real)", totalEst > 0 ? `${pct}%` : "—"],
     ],
-    headStyles: { fillColor: AZUL, textColor: BLANCO, fontSize: 8, fontStyle: "bold" },
-    bodyStyles: { fontSize: 9, cellPadding: 3 },
-    alternateRowStyles: { fillColor: CELDA },
-    columnStyles: { 0: { fontStyle: "bold", cellWidth: 80 }, 1: { halign: "center" } },
+    headStyles: { fillColor: NAVY, textColor: BLANCO, fontSize: 8, fontStyle: "bold", cellPadding: 3 },
+    bodyStyles: { fontSize: 9, cellPadding: 3, textColor: NEGRO },
+    alternateRowStyles: { fillColor: GRIS_L },
+    columnStyles: {
+      0: { fontStyle: "bold", textColor: GRIS, cellWidth: 70 },
+      1: { halign: "right", fontStyle: "bold", textColor: AZUL },
+    },
+    didParseCell: (data) => {
+      if (data.section === "body" && data.column.index === 1) {
+        const val = String(data.cell.raw ?? "");
+        if (val.startsWith("+")) data.cell.styles.textColor = VERDE;
+        else if (val.startsWith("-")) data.cell.styles.textColor = ROJO;
+      }
+    },
   });
-  y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6;
 
-  // ── Pie de página en cada hoja ────────────────────────────────────────────
+  y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
+
+  // ── Firma / sello ────────────────────────────────────────────────────────────
+  y = checkPage(doc, y, 28);
+  const midX = PW / 2;
+
+  doc.setDrawColor(200, 210, 220);
+  doc.setLineWidth(0.3);
+  doc.line(30, y + 16, midX - 8, y + 16);
+  doc.line(midX + 8, y + 16, PW - 30, y + 16);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7);
+  doc.setTextColor(...GRIS);
+  doc.text("Técnico Responsable", (30 + midX - 8) / 2, y + 20, { align: "center" });
+  doc.text("Supervisor / Revisor", (midX + 8 + PW - 30) / 2, y + 20, { align: "center" });
+
+  // Nombre técnico debajo de la línea
+  if (tecnicos !== "—") {
+    doc.setFontSize(7.5);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(...NEGRO);
+    doc.text(tecnicos.split(",")[0].trim(), (30 + midX - 8) / 2, y + 25, { align: "center" });
+  }
+  if (sup !== "—") {
+    doc.setFontSize(7.5);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(...NEGRO);
+    doc.text(sup, (midX + 8 + PW - 30) / 2, y + 25, { align: "center" });
+  }
+
+  // ── Pie de página ─────────────────────────────────────────────────────────
   const totalPages = doc.getNumberOfPages();
   for (let i = 1; i <= totalPages; i++) {
     doc.setPage(i);
     const PH = doc.internal.pageSize.getHeight();
-    doc.setFillColor(245, 247, 250);
-    doc.rect(0, PH - 12, PW, 12, "F");
+    // Línea navy + gris claro
+    doc.setFillColor(...NAVY);
+    doc.rect(0, PH - 10, PW, 10, "F");
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(7);
-    doc.setTextColor(...GRIS);
-    doc.text(`SYNC MSC — Informe de Cierre OT #${numOT} — Generado ${new Date().toLocaleDateString("es-CL")}`, 15, PH - 5);
-    doc.text(`Página ${i} / ${totalPages}`, PW - 15, PH - 5, { align: "right" });
+    doc.setFontSize(6.5);
+    doc.setTextColor(...BLANCO);
+    doc.text(`SYNC MSC · Informe de Cierre OT ${numOT} · Generado ${new Date().toLocaleDateString("es-BO")}`, 15, PH - 3.5);
+    doc.text(`Pág. ${i} / ${totalPages}`, PW - 15, PH - 3.5, { align: "right" });
   }
 
-  // ── Descargar ─────────────────────────────────────────────────────────────
-  doc.save(`Informe_OT_${ot.numeroOT ?? "SN"}_${new Date().toISOString().slice(0, 10)}.pdf`);
+  doc.save(`Informe_OT_${numOT}_${new Date().toISOString().slice(0, 10)}.pdf`);
 }
 
-// ── Utilidades internas ───────────────────────────────────────────────────────
-function seccionTitulo(doc: jsPDF, texto: string, y: number, PW: number) {
-  doc.setFillColor(...AZUL2);
-  doc.rect(15, y, PW - 30, 7, "F");
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
-  doc.setTextColor(...BLANCO);
-  doc.text(texto, 18, y + 5);
-}
-
-function verificarSaltoPage(doc: jsPDF, y: number, espacio: number) {
+// ── Verificar salto de página ─────────────────────────────────────────────────
+function checkPage(doc: jsPDF, y: number, espacio: number): number {
   const PH = doc.internal.pageSize.getHeight();
-  if (y + espacio > PH - 20) doc.addPage();
-}
-
-function verificarSaltoPageY(doc: jsPDF, y: number, espacio: number): number {
-  const PH = doc.internal.pageSize.getHeight();
-  if (y + espacio > PH - 20) { doc.addPage(); return 20; }
+  if (y + espacio > PH - 18) { doc.addPage(); return 20; }
   return y;
 }
