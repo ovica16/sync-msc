@@ -689,6 +689,7 @@ export default function ReporteOTPage() {
   const hasReactivas = ot.lineas.some((l) => l.tipoOT === "CMP" || l.tipoOT === "CMR");
 
   return (
+    <>
     <div style={S.page}>
       <AppHeader backHref="/ordenes" />
       <div style={S.wrap}>
@@ -1371,5 +1372,6 @@ export default function ReporteOTPage() {
         </div>
       </div>
     )}
+    </>
   );
 }
