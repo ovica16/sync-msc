@@ -384,7 +384,7 @@ export default function TurneroPage() {
                                       )}
                                       {esAdmin && (
                                         <button
-                                          onClick={() => setDeletingId(ot._id)}
+                                          onClick={(e) => { e.stopPropagation(); setDeletingId(ot._id); }}
                                           style={{ marginLeft: "auto", fontSize: 11, color: "#dc2626", fontWeight: 600, background: "none", border: "none", cursor: "pointer", padding: 0 }}
                                         >
                                           Eliminar
@@ -448,7 +448,7 @@ export default function TurneroPage() {
     {/* Modal confirmación eliminar */}
     {deletingId && (
       <div
-        style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+        style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
         onClick={() => setDeletingId(null)}
       >
         <div
