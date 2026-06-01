@@ -247,38 +247,74 @@ export async function generarInformeOT(ot: OTData): Promise<void> {
   y += 14;
 
   if (correctivos.length > 0) {
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(7.5);
-    doc.setTextColor(...AZUL);
-    doc.text("Trabajos Correctivos (CMP / CMR)", 15, y);
-    y += 4;
-    autoTable(doc, {
-      startY: y,
-      margin: { left: 15, right: 15 },
-      head: [["TAG / Equipo", "Tipo", "Síntoma", "Causa Probable", "Resolución Aplicada", "HH Est.", "HH Real"]],
-      body: correctivos.map(l => [
-        `${l.tag}\n${l.descripcionEquipo}`,
-        l.tipoOT,
-        l.sintoma ?? "—",
-        l.causaProbable ?? "—",
-        l.resolucionAplicada ?? "—",
-        fmtHrs(l.tiempoEstimadoHrs),
-        fmtHrs(l.tiempoRealHrs),
-      ]),
-      headStyles: { fillColor: NAVY, textColor: BLANCO, fontSize: 7, fontStyle: "bold", cellPadding: 2.5 },
-      bodyStyles: { fontSize: 7.5, cellPadding: 2.5, textColor: NEGRO },
-      alternateRowStyles: { fillColor: GRIS_L },
-      columnStyles: {
-        0: { cellWidth: 30, fontStyle: "bold" },
-        1: { cellWidth: 14, halign: "center" },
-        2: { cellWidth: 28 },
-        3: { cellWidth: 28 },
-        4: { cellWidth: 38 },
-        5: { cellWidth: 13, halign: "center" },
-        6: { cellWidth: 13, halign: "center" },
-      },
-    });
-    y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 5;
+    // ── CMR — Correctivos Menores con árbol de fallas ──────────────────────
+    const cmr = correctivos.filter(l => l.tipoOT === "CMR");
+    if (cmr.length > 0) {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7.5);
+      doc.setTextColor(...AZUL);
+      doc.text("Correctivos Menores Rutinarios (CMR) — Árbol de Fallas", 15, y);
+      y += 4;
+      autoTable(doc, {
+        startY: y,
+        margin: { left: 15, right: 15 },
+        head: [["TAG / Equipo", "Síntoma / Modo de Falla", "Causa Probable", "Resolución Aplicada", "HH Est.", "HH Real"]],
+        body: cmr.map(l => [
+          `${l.tag}\n${l.descripcionEquipo}`,
+          l.sintoma ?? "—",
+          l.causaProbable ?? "—",
+          l.resolucionAplicada ?? "—",
+          fmtHrs(l.tiempoEstimadoHrs),
+          fmtHrs(l.tiempoRealHrs),
+        ]),
+        headStyles: { fillColor: NAVY, textColor: BLANCO, fontSize: 7, fontStyle: "bold", cellPadding: 2.5 },
+        bodyStyles: { fontSize: 7.5, cellPadding: 2.5, textColor: NEGRO },
+        alternateRowStyles: { fillColor: GRIS_L },
+        columnStyles: {
+          0: { cellWidth: 32, fontStyle: "bold" },
+          1: { cellWidth: 35 },
+          2: { cellWidth: 32 },
+          3: { cellWidth: 40 },
+          4: { cellWidth: 14, halign: "center" },
+          5: { cellWidth: 14, halign: "center" },
+        },
+      });
+      y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 5;
+    }
+
+    // ── CMP — Correctivos Mayores Programados ──────────────────────────────
+    const cmp = correctivos.filter(l => l.tipoOT === "CMP");
+    if (cmp.length > 0) {
+      y = checkPage(doc, y, 30);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7.5);
+      doc.setTextColor(...AZUL);
+      doc.text("Correctivos Mayores Programados (CMP)", 15, y);
+      y += 4;
+      autoTable(doc, {
+        startY: y,
+        margin: { left: 15, right: 15 },
+        head: [["TAG / Equipo", "Descripción del Trabajo", "Resolución / Resultado", "HH Est.", "HH Real"]],
+        body: cmp.map(l => [
+          `${l.tag}\n${l.descripcionEquipo}`,
+          l.descripcionTrabajo ?? l.sintoma ?? "—",
+          l.resolucionAplicada ?? "—",
+          fmtHrs(l.tiempoEstimadoHrs),
+          fmtHrs(l.tiempoRealHrs),
+        ]),
+        headStyles: { fillColor: NAVY, textColor: BLANCO, fontSize: 7, fontStyle: "bold", cellPadding: 2.5 },
+        bodyStyles: { fontSize: 7.5, cellPadding: 2.5, textColor: NEGRO },
+        alternateRowStyles: { fillColor: GRIS_L },
+        columnStyles: {
+          0: { cellWidth: 32, fontStyle: "bold" },
+          1: { cellWidth: 60 },
+          2: { cellWidth: 55 },
+          3: { cellWidth: 14, halign: "center" },
+          4: { cellWidth: 14, halign: "center" },
+        },
+      });
+      y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 5;
+    }
   }
 
   if (preventivos.length > 0) {
