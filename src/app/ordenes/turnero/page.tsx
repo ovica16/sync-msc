@@ -112,11 +112,11 @@ export default function TurneroPage() {
 
   // Fechas de la semana
   const lunes = getMondayOfWeek(anio, semana);
-  const domingo = new Date(lunes); domingo.setDate(lunes.getDate() + 6);
+  const domingo = new Date(lunes); domingo.setUTCDate(lunes.getUTCDate() + 6);
 
   // Mapa día abrev → fecha
   const fechasDias = DIAS_SEMANA.reduce<Record<string, Date>>((acc, d, i) => {
-    const f = new Date(lunes); f.setDate(lunes.getDate() + i);
+    const f = new Date(lunes); f.setUTCDate(lunes.getUTCDate() + i);
     acc[d] = f; return acc;
   }, {});
 
@@ -226,7 +226,7 @@ export default function TurneroPage() {
             <div style={{ fontSize: 15, fontWeight: 800, color: "#0f2847", background: "#f8fafc", borderRadius: 8, padding: "5px 14px", border: "1px solid #e2e8f0" }}>
               Sem {semana} · {anio}
               <span style={{ fontSize: 11, fontWeight: 400, color: "#94a3b8", marginLeft: 8 }}>
-                {lunes.toLocaleDateString("es-BO", { day: "2-digit", month: "short" })} – {domingo.toLocaleDateString("es-BO", { day: "2-digit", month: "short" })}
+                {lunes.toLocaleDateString("es-BO", { day: "2-digit", month: "short", timeZone: "UTC" })} – {domingo.toLocaleDateString("es-BO", { day: "2-digit", month: "short", timeZone: "UTC" })}
               </span>
             </div>
             <button
@@ -308,7 +308,7 @@ export default function TurneroPage() {
                           {/* Subencabezado día */}
                           <div style={{ background: "#f8fafc", padding: "8px 18px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                             <span style={{ fontSize: 12, fontWeight: 700, color: "#475569" }}>
-                              {DIAS_FULL[dia]} {fecha.toLocaleDateString("es-BO", { day: "2-digit", month: "short" })}
+                              {DIAS_FULL[dia]} {fecha.toLocaleDateString("es-BO", { day: "2-digit", month: "short", timeZone: "UTC" })}
                             </span>
                             {otsDelDia.length > 0 ? (
                               <span style={{ fontSize: 11, color: "#d97706", fontWeight: 700 }}>
