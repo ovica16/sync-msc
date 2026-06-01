@@ -186,3 +186,19 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     return Response.json({ ok: false, error: message }, { status: 400 });
   }
 }
+
+export async function DELETE(_req: NextRequest, { params }: Ctx) {
+  const { id } = await params;
+  try {
+    await prisma.otHistorial.deleteMany({ where: { ordenTrabajoId: id } });
+    await prisma.otTecnico.deleteMany({ where: { ordenTrabajoId: id } });
+    await prisma.otLinea.deleteMany({ where: { ordenTrabajoId: id } });
+    await prisma.otRegistroDiario.deleteMany({ where: { ordenTrabajoId: id } });
+    await prisma.ordenTrabajo.delete({ where: { id } });
+    return Response.json({ ok: true });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Error interno";
+    return Response.json({ ok: false, error: message }, { status: 400 });
+  }
+}
+
