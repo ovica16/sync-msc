@@ -328,6 +328,9 @@ model RegistroCalibracion {
   stickerImpreso        Boolean  @default(false)
   otAsociada            String?
   areaCodigo            String   @default("3320")
+  estado                String   @default("revision") // revision | aprobado
+  tecnicoFirma          String?  // Base64 or URL
+  supervisorFirma       String?  // Base64 or URL
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 

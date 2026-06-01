@@ -13,12 +13,23 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
 export async function PATCH(req: NextRequest, { params }: Ctx) {
   try {
     const { id } = await params;
-    const body: { stickerImpreso?: boolean; observaciones?: string } = await req.json();
+    const body: {
+      stickerImpreso?: boolean;
+      observaciones?: string;
+      estado?: string;
+      supervisorFirma?: string;
+      supervisorId?: string;
+      supervisorNombre?: string;
+    } = await req.json();
     const registro = await prisma.registroCalibracion.update({
       where: { id },
       data: {
         ...(typeof body.stickerImpreso === "boolean" ? { stickerImpreso: body.stickerImpreso } : {}),
         ...(typeof body.observaciones  === "string"  ? { observaciones:  body.observaciones  } : {}),
+        ...(typeof body.estado         === "string"  ? { estado:         body.estado         } : {}),
+        ...(typeof body.supervisorFirma === "string" ? { supervisorFirma: body.supervisorFirma } : {}),
+        ...(typeof body.supervisorId   === "string"  ? { supervisorId:   body.supervisorId   } : {}),
+        ...(typeof body.supervisorNombre === "string" ? { supervisorNombre: body.supervisorNombre } : {}),
       },
     });
     return Response.json({ ok: true, registro: { ...registro, _id: registro.id } });

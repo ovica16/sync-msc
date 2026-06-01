@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest } from "next/server";
+import crypto from "crypto";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -7,9 +8,17 @@ export async function PUT(req: NextRequest, { params }: Ctx) {
   const { id } = await params;
   try {
     const body = await req.json();
-    // Nunca permitir cambio de password por esta ruta
-    delete body.passwordHash;
+    
+    // Hash password if provided
+    let passwordHash: string | undefined;
+    if (body.password && typeof body.password === "string" && body.password.trim() !== "") {
+      passwordHash = crypto.createHash("sha256")
+        .update(body.password + "syncmsc-salt-v1").digest("hex");
+    }
+
+    // Clean up raw password fields
     delete body.password;
+    delete body.passwordHash;
 
     const { areas, ...rest } = body;
 
@@ -17,6 +26,7 @@ export async function PUT(req: NextRequest, { params }: Ctx) {
       where: { id },
       data: {
         ...rest,
+        ...(passwordHash ? { passwordHash } : {}),
         ...(areas !== undefined ? {
           areas: {
             deleteMany: {},

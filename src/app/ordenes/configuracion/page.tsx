@@ -1,6 +1,8 @@
 "use client";
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import AppHeader from "@/components/AppHeader";
+import { useUser } from "@/context/AuthContext";
+import { useRouter } from "next/navigation";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 type Tab = "equipos" | "arbol" | "usuarios" | "areas" | "checklist";
@@ -49,7 +51,7 @@ type UsuarioItem = {
   rol: number; areas: string[]; disciplina?: string; activo: boolean;
 };
 type UsuarioForm = {
-  nombre: string; email: string; password: string; rol: string;
+  nombre: string; email: string; password?: string; rol: string;
   jde: string; celular: string; puesto: string; superintendencia: string; areaTrabajo: string;
   areas: string[]; disciplina: string;
 };
@@ -1064,6 +1066,7 @@ function UsuariosTab() {
   const [items, setItems] = useState<UsuarioItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [editItem, setEditItem] = useState<UsuarioItem | null>(null);
   const [form, setForm] = useState<UsuarioForm>({
     nombre: "", email: "", password: "", rol: "4",
     jde: "", celular: "", puesto: "", superintendencia: "", areaTrabajo: "",
@@ -1084,12 +1087,53 @@ function UsuariosTab() {
 
   useEffect(() => { load(); }, [load]);
 
+  function openAdd() {
+    setEditItem(null);
+    setForm({
+      nombre: "", email: "", password: "", rol: "4",
+      jde: "", celular: "", puesto: "", superintendencia: "", areaTrabajo: "",
+      areas: [], disciplina: "GENERAL",
+    });
+    setErr("");
+    setShowForm(true);
+  }
+
+  function openEdit(item: UsuarioItem) {
+    setEditItem(item);
+    setForm({
+      nombre: item.nombre,
+      email: item.email ?? "",
+      password: "", // Contraseña vacía por defecto
+      rol: String(item.rol),
+      jde: item.jde ?? "",
+      celular: item.celular ?? "",
+      puesto: item.puesto ?? "",
+      superintendencia: item.superintendencia ?? "",
+      areaTrabajo: item.areaTrabajo ?? "",
+      areas: item.areas ?? [],
+      disciplina: item.disciplina ?? "GENERAL",
+    });
+    setErr("");
+    setShowForm(true);
+  }
+
   async function save() {
     if (!form.nombre.trim() || !form.rol) { setErr("Nómina y Rol son obligatorios"); return; }
     setSaving(true); setErr("");
-    const res = await fetch("/api/usuarios", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
+
+    const url = editItem ? `/api/usuarios/${editItem._id}` : "/api/usuarios";
+    const method = editItem ? "PUT" : "POST";
+
+    // Si editamos y la contraseña está vacía, no la enviamos para no sobreescribirla en el backend
+    const body = { ...form };
+    if (editItem && (!body.password || !body.password.trim())) {
+      delete body.password;
+    }
+
+    const res = await fetch(url, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
     });
     const data = await res.json();
     setSaving(false);
@@ -1165,14 +1209,16 @@ function UsuariosTab() {
           </p>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button style={C.btnBlue} onClick={() => { setErr(""); setShowForm((s) => !s); }}>+ Agregar</button>
+          <button style={C.btnBlue} onClick={openAdd}>+ Agregar</button>
           <BulkImportPanel entityName="Usuarios" fileName="plantilla_usuarios.csv" fields={USU_FIELDS} templateRows={USU_TEMPLATE} onImport={importarFilas} />
         </div>
       </div>
 
       {showForm && (
         <div style={C.formBox}>
-          <h3 style={{ margin: "0 0 16px", fontSize: 14, fontWeight: 700, color: "#0f2847" }}>Nuevo Usuario</h3>
+          <h3 style={{ margin: "0 0 16px", fontSize: 14, fontWeight: 700, color: "#0f2847" }}>
+            {editItem ? "Editar Usuario" : "Nuevo Usuario"}
+          </h3>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px 16px" }}>
             <div style={{ gridColumn: "span 2" }}>
               <label style={C.label}>Nómina (nombre completo) *</label>
@@ -1240,7 +1286,7 @@ function UsuariosTab() {
               <input type="email" style={C.input} value={form.email} onChange={(e) => upd("email", e.target.value.toLowerCase())} placeholder="usuario@msc.com" />
             </div>
             <div>
-              <label style={C.label}>Contraseña (opcional)</label>
+              <label style={C.label}>{editItem ? "Contraseña (dejar en blanco para no cambiar)" : "Contraseña (opcional)"}</label>
               <input type="password" style={C.input} value={form.password} onChange={(e) => upd("password", e.target.value)} />
             </div>
             <div style={{ gridColumn: "span 3" }}>
@@ -1258,7 +1304,9 @@ function UsuariosTab() {
           </div>
           <ErrMsg msg={err} />
           <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
-            <button style={C.btnBlue} onClick={save} disabled={saving}>{saving ? "Creando…" : "Crear usuario"}</button>
+            <button style={C.btnBlue} onClick={save} disabled={saving}>
+              {saving ? (editItem ? "Guardando…" : "Creando…") : (editItem ? "Guardar" : "Crear usuario")}
+            </button>
             <button style={C.btnOutline} onClick={() => setShowForm(false)}>Cancelar</button>
           </div>
         </div>
@@ -1323,7 +1371,10 @@ function UsuariosTab() {
                     </td>
                     <td style={C.td}><Badge bg={rc.bg} color={rc.color}>{ROL_LABEL[item.rol] ?? item.rol}</Badge></td>
                     <td style={C.td}><Badge bg={item.activo ? "#dcfce7" : "#f1f5f9"} color={item.activo ? "#16a34a" : "#94a3b8"}>{item.activo ? "Activo" : "Inactivo"}</Badge></td>
-                    <td style={C.td}><button style={item.activo ? C.btnRed : C.btnGreen} onClick={() => toggleActivo(item)}>{item.activo ? "Desactivar" : "Activar"}</button></td>
+                    <td style={C.td}>
+                      <button style={{ ...C.btnSmall, marginRight: 4 }} onClick={() => openEdit(item)}>Editar</button>
+                      <button style={item.activo ? C.btnRed : C.btnGreen} onClick={() => toggleActivo(item)}>{item.activo ? "Desactivar" : "Activar"}</button>
+                    </td>
                   </tr>
                 );
               })}
@@ -1866,6 +1917,26 @@ function ChecklistTab() {
 // ─── Main page ─────────────────────────────────────────────────────────────────
 export default function ConfiguracionPage() {
   const [tab, setTab] = useState<Tab>("equipos");
+  const { user, loading } = useUser();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!loading && (!user || user.rol !== 1)) {
+      router.replace("/ordenes");
+    }
+  }, [user, loading, router]);
+
+  if (loading) {
+    return (
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f1f5f9" }}>
+        <p style={{ color: "#64748b", fontSize: 13, fontFamily: "Arial, sans-serif" }}>Verificando credenciales...</p>
+      </div>
+    );
+  }
+
+  if (!user || user.rol !== 1) {
+    return null;
+  }
 
   const TABS: { id: Tab; label: string }[] = [
     { id: "equipos", label: "Equipos / TAGs" },

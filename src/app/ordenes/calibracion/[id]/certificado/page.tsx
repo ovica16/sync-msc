@@ -40,6 +40,8 @@ type CalibRecord = {
   observaciones?: string;
   otAsociada?: string;
   areaCodigo?: string;
+  tecnicoFirma?: string;
+  supervisorFirma?: string;
 };
 
 type PatronDoc = {
@@ -468,10 +470,18 @@ export default function CertificadoPage() {
         {/* ── RESPONSABLES ──────────────────────────────────────────────── */}
         <SecTitle>Datos Responsable</SecTitle>
         <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 10, alignItems: "end" }}>
-          <div style={{ textAlign: "center" }}>
-            <div style={{ height: 36, borderBottom: "1px solid #374151", marginBottom: 4 }} />
-            <div style={{ fontSize: 9.5, fontWeight: 700, color: "#0d2f5e" }}>{record.tecnicoNombre}</div>
-            <div style={{ fontSize: 7.5, color: "#6b7280", marginTop: 1 }}>Responsable</div>
+          <div style={{ textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center" }}>
+            <div style={{ height: 42, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 4 }}>
+              {record.tecnicoFirma ? (
+                <img src={record.tecnicoFirma} alt="Firma Técnico" style={{ maxHeight: 42, maxWidth: 120, objectFit: "contain" }} />
+              ) : (
+                <div style={{ height: 1, width: 80, borderBottom: "1px solid #374151" }} />
+              )}
+            </div>
+            <div style={{ borderTop: "1px solid #cbd5e1", width: "100%", paddingTop: 4 }}>
+              <div style={{ fontSize: 9.5, fontWeight: 700, color: "#0d2f5e" }}>{record.tecnicoNombre}</div>
+              <div style={{ fontSize: 7.5, color: "#6b7280", marginTop: 1 }}>Responsable</div>
+            </div>
           </div>
           <div style={{ textAlign: "center", padding: "0 8px" }}>
             <div style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 6, padding: "6px 14px", display: "inline-block" }}>
@@ -487,10 +497,18 @@ export default function CertificadoPage() {
               </div>
             </div>
           </div>
-          <div style={{ textAlign: "center" }}>
-            <div style={{ height: 36, borderBottom: "1px solid #374151", marginBottom: 4 }} />
-            <div style={{ fontSize: 9.5, fontWeight: 700, color: "#0d2f5e" }}>{record.supervisorNombre || "—"}</div>
-            <div style={{ fontSize: 7.5, color: "#6b7280", marginTop: 1 }}>Aprobado</div>
+          <div style={{ textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center" }}>
+            <div style={{ height: 42, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 4 }}>
+              {record.supervisorFirma ? (
+                <img src={record.supervisorFirma} alt="Firma Supervisor" style={{ maxHeight: 42, maxWidth: 120, objectFit: "contain" }} />
+              ) : (
+                <div style={{ height: 1, width: 80, borderBottom: "1px solid #374151" }} />
+              )}
+            </div>
+            <div style={{ borderTop: "1px solid #cbd5e1", width: "100%", paddingTop: 4 }}>
+              <div style={{ fontSize: 9.5, fontWeight: 700, color: "#0d2f5e" }}>{record.supervisorNombre || "—"}</div>
+              <div style={{ fontSize: 7.5, color: "#6b7280", marginTop: 1 }}>Aprobado</div>
+            </div>
           </div>
         </div>
 
