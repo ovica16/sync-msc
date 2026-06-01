@@ -1149,7 +1149,7 @@ export default function ReporteOTPage() {
               {isConcluido ? "OT concluida — solo lectura." : "OT revisada — lista para concluir."}
             </p>
             <button
-              onClick={() => generarInformeOT(ot)}
+              onClick={() => void generarInformeOT(ot)}
               style={{ background: "#0d2847", color: "#fff", border: "none", borderRadius: 6, padding: "8px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
             >
               Descargar Informe PDF
