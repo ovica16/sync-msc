@@ -1148,9 +1148,13 @@ export default function RegistroOTPage() {
         <div style={{ ...S.wrap, maxWidth: 460, textAlign: "center", paddingTop: 64 }}>
           <div style={{ fontSize: 52, marginBottom: 10 }}>{doneOT.estado === "pendiente_revision" ? "📋" : "💾"}</div>
           <h2 style={{ fontSize: 22, fontWeight: 800, color: "#1e293b", marginBottom: 6 }}>OT Registrada</h2>
-          <div style={{ fontSize: 30, fontWeight: 800, color: "#2563eb", letterSpacing: "0.04em", marginBottom: 8 }}>#{doneOT.numeroOT}</div>
-          {form.origenPlan && form.otJdeNumero && (
-            <div style={{ ...S.badge("#2563eb"), fontSize: 12, marginBottom: 10 }}>Plan · OT {form.otJdeNumero}</div>
+          {form.otJdeNumero ? (
+            <>
+              <div style={{ fontSize: 30, fontWeight: 800, color: "#2563eb", letterSpacing: "0.04em", marginBottom: 4 }}>OT {form.otJdeNumero}</div>
+              <div style={{ fontSize: 13, color: "#94a3b8", marginBottom: 10 }}>Ref. interna #{doneOT.numeroOT}</div>
+            </>
+          ) : (
+            <div style={{ fontSize: 30, fontWeight: 800, color: "#2563eb", letterSpacing: "0.04em", marginBottom: 10 }}>#{doneOT.numeroOT}</div>
           )}
           <p style={{ color: "#64748b", fontSize: 14, lineHeight: 1.6, marginBottom: 28 }}>
             {doneOT.estado === "pendiente_revision" ? "OT enviada al supervisor para revisión." : "OT guardada como borrador."}
