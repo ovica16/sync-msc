@@ -12,6 +12,14 @@ type EstadoOT = "borrador" | "pendiente_revision" | "solicitar_correccion" | "re
 type InspeccionItem = { descripcion: string; ok: boolean; obs: string };
 type Inspeccion = { checklistId: string; checklistNombre: string; items: InspeccionItem[] };
 
+type AdjuntoLinea = {
+  tipo: "foto" | "documento";
+  nombre: string;
+  dataUrl: string;
+  comentario: string;
+  comentariosExtra: string[];
+};
+
 type Linea = {
   tag: string;
   descripcionEquipo: string;
@@ -25,6 +33,7 @@ type Linea = {
   tareasEjecutadas?: string[];
   observaciones?: string;
   inspeccion?: Inspeccion | null;
+  adjuntos?: AdjuntoLinea[];
 };
 
 type SupForm = {
