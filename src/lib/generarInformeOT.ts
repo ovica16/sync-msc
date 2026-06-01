@@ -2,6 +2,14 @@ import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
+interface AdjuntoItem {
+  tipo: "foto" | "documento";
+  nombre: string;
+  dataUrl: string;
+  comentario: string;
+  comentariosExtra: string[];
+}
+
 interface LineaOT {
   tag: string;
   descripcionEquipo: string;
@@ -14,6 +22,7 @@ interface LineaOT {
   descripcionTrabajo?: string;
   tareasEjecutadas?: string[];
   observaciones?: string;
+  adjuntos?: AdjuntoItem[];
 }
 
 interface DatosSupervision {
@@ -21,11 +30,8 @@ interface DatosSupervision {
   comentariosSupervisor?: string;
   revisadoPor?: string;
   revisadoEn?: string;
-  // Legacy — no se muestran pero se mantienen para compatibilidad
   codigoModoFallaISO?: string;
   clasificacionRCM?: string;
-  criticidadEquipo?: string;
-  leccionAprendida?: string;
 }
 
 interface TecnicoRef { nombreCompleto: string }
@@ -49,25 +55,19 @@ interface OTData {
   historialCambios?: CambioHistorial[];
 }
 
-// ── Paleta ────────────────────────────────────────────────────────────────────
-const NAVY   = [13, 47, 94]    as [number, number, number]; // #0d2f5e — igual al certificado
-const AZUL   = [37, 99, 235]   as [number, number, number]; // #2563eb
-const GRIS   = [107, 114, 128] as [number, number, number]; // #6b7280
-const GRIS_L = [241, 245, 249] as [number, number, number]; // #f1f5f9
-const BLANCO = [255, 255, 255] as [number, number, number];
-const NEGRO  = [17, 24, 39]    as [number, number, number]; // #111827
-const VERDE  = [22, 163, 74]   as [number, number, number]; // #16a34a
-const ROJO   = [220, 38, 38]   as [number, number, number]; // #dc2626
+// ── Paleta — header más claro ──────────────────────────────────────────────────
+const NAVY    = [13, 47, 94]     as [number, number, number]; // barras de sección
+const AZUL    = [37, 99, 235]    as [number, number, number]; // acento
+const HDR_BG  = [235, 242, 255]  as [number, number, number]; // fondo header claro (azul-50)
+const HDR_TOP = [59, 100, 165]   as [number, number, number]; // franja superior header
+const GRIS    = [107, 114, 128]  as [number, number, number];
+const GRIS_L  = [241, 245, 249]  as [number, number, number];
+const BLANCO  = [255, 255, 255]  as [number, number, number];
+const NEGRO   = [17, 24, 39]     as [number, number, number];
+const VERDE   = [22, 163, 74]    as [number, number, number];
+const ROJO    = [220, 38, 38]    as [number, number, number];
 
 // ── Labels ────────────────────────────────────────────────────────────────────
-const TIPO_OT_LABEL: Record<string, string> = {
-  CMP: "Correctivo Mayor Programado",
-  CMR: "Correctivo Menor Rutinario",
-  PMP: "Preventivo Mayor Programado",
-  PMT: "Preventivo Menor / Tarea",
-  PTJ: "Predictivo / Inspección",
-};
-
 const ESTADO_LABEL: Record<string, string> = {
   borrador: "Borrador",
   pendiente_revision: "Pendiente revisión",
@@ -77,11 +77,11 @@ const ESTADO_LABEL: Record<string, string> = {
 };
 
 const ESTADO_COLOR: Record<string, [number, number, number]> = {
-  concluido: VERDE,
-  revisado: AZUL,
-  pendiente_revision: [217, 119, 6],
+  concluido:            VERDE,
+  revisado:             AZUL,
+  pendiente_revision:   [217, 119, 6],
   solicitar_correccion: ROJO,
-  borrador: GRIS,
+  borrador:             GRIS,
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -95,24 +95,19 @@ function fmtHrs(n?: number) {
   return `${n} h`;
 }
 
-// ── Encabezado de sección — barra vertical + línea (estilo certificado) ───────
 function seccion(doc: jsPDF, texto: string, y: number, PW: number): void {
-  // Barra vertical azul navy
   doc.setFillColor(...NAVY);
   doc.rect(15, y, 2.5, 11, "F");
-  // Texto
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
   doc.setTextColor(...NAVY);
   doc.text(texto.toUpperCase(), 20, y + 7.5);
-  // Línea horizontal
   const textW = doc.getTextWidth(texto.toUpperCase());
   doc.setDrawColor(226, 232, 240);
   doc.setLineWidth(0.4);
   doc.line(21 + textW, y + 7, PW - 15, y + 7);
 }
 
-// ── Badge de estado (pill) ────────────────────────────────────────────────────
 function estadoBadge(doc: jsPDF, estado: string, x: number, y: number) {
   const label = ESTADO_LABEL[estado] ?? estado;
   const color = ESTADO_COLOR[estado] ?? GRIS;
@@ -137,49 +132,62 @@ export function generarInformeOT(ot: OTData): void {
   const preventivos = ot.lineas.filter(l => !["CMP", "CMR"].includes(l.tipoOT));
   const tieneCorrectivos = correctivos.length > 0;
 
+  // Nombre del supervisor: usar historial (nombreUsuario) antes que revisadoPor (que guarda ID)
   const entradaRevision = (ot.historialCambios ?? [])
     .slice().reverse()
-    .find(c => /aprobada|revisado|concluida/i.test(c.cambio));
-  const sup = ot.datosSupervision?.revisadoPor ?? entradaRevision?.nombreUsuario ?? "—";
+    .find(c => /revisado|aprobad|concluid/i.test(c.cambio));
+  const sup = entradaRevision?.nombreUsuario ?? ot.datosSupervision?.revisadoPor ?? "—";
   const fechaRevision = ot.datosSupervision?.revisadoEn
     ? fmt(ot.datosSupervision.revisadoEn)
     : entradaRevision?.fechaHora ? fmt(entradaRevision.fechaHora) : "—";
 
-  // ── Encabezado ──────────────────────────────────────────────────────────────
-  // Franja superior navy
-  doc.setFillColor(...NAVY);
-  doc.rect(0, 0, PW, 26, "F");
+  // Adjuntos de todas las líneas
+  const todosAdjuntos = ot.lineas.flatMap(l =>
+    (l.adjuntos ?? []).map(a => ({ ...a, tag: l.tag }))
+  );
+  const fotos = todosAdjuntos.filter(a => a.tipo === "foto");
+  const documentos = todosAdjuntos.filter(a => a.tipo === "documento");
 
-  // Línea de acento azul
+  // ── Encabezado — fondo claro ─────────────────────────────────────────────────
+  // Franja superior fina
+  doc.setFillColor(...HDR_TOP);
+  doc.rect(0, 0, PW, 5, "F");
+
+  // Fondo claro principal
+  doc.setFillColor(...HDR_BG);
+  doc.rect(0, 5, PW, 24, "F");
+
+  // Línea de acento azul en la parte inferior del header
   doc.setFillColor(...AZUL);
-  doc.rect(0, 26, PW, 1.5, "F");
+  doc.rect(0, 29, PW, 1.5, "F");
 
-  // Texto encabezado
+  // Texto encabezado — izquierda
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(11);
-  doc.setTextColor(...BLANCO);
-  doc.text("SYNC MSC", 15, 10);
+  doc.setFontSize(12);
+  doc.setTextColor(...NAVY);
+  doc.text("SYNC MSC", 15, 14);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
-  doc.setTextColor(180, 200, 230);
-  doc.text("Sistema de Gestión de Mantenimiento", 15, 16);
-  doc.text("Informe de Cierre de Orden de Trabajo", 15, 21.5);
+  doc.setTextColor(...HDR_TOP);
+  doc.text("Sistema de Gestión de Mantenimiento", 15, 20);
+  doc.text("Informe de Cierre de Orden de Trabajo", 15, 25.5);
 
-  // OT number destacado (derecha)
+  // OT number destacado — derecha
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(14);
-  doc.setTextColor(...BLANCO);
-  doc.text(`OT ${numOT}`, PW - 15, 13, { align: "right" });
+  doc.setFontSize(15);
+  doc.setTextColor(...NAVY);
+  doc.text(`OT ${numOT}`, PW - 15, 15, { align: "right" });
+
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7.5);
-  doc.setTextColor(160, 190, 225);
-  doc.text(fmt(ot.fecha), PW - 15, 19, { align: "right" });
+  doc.setTextColor(...HDR_TOP);
+  doc.text(fmt(ot.fecha), PW - 15, 21, { align: "right" });
 
   // Estado badge
-  estadoBadge(doc, ot.estado, PW - 30, 24);
+  estadoBadge(doc, ot.estado, PW - 30, 27);
 
-  y = 36;
+  y = 38;
 
   // ── 1. DATOS GENERALES ──────────────────────────────────────────────────────
   seccion(doc, "1. Datos Generales", y, PW);
@@ -285,7 +293,7 @@ export function generarInformeOT(ot: OTData): void {
     y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 5;
   }
 
-  // ── 3. SUPERVISIÓN (solo si hay correctivos) ────────────────────────────────
+  // ── 3. SUPERVISIÓN (solo si hay correctivos y datos) ────────────────────────
   const ds = ot.datosSupervision ?? {};
   const comentarios = (ds.comentariosSupervisor ?? "").split("\n").filter(Boolean);
   const hayDatosSupervision = tieneCorrectivos && (ds.requierePlanificacion || comentarios.length > 0);
@@ -324,7 +332,7 @@ export function generarInformeOT(ot: OTData): void {
 
   // ── 4. RESUMEN HORAS-HOMBRE ─────────────────────────────────────────────────
   y = checkPage(doc, y, 45);
-  const secNum = hayDatosSupervision ? "4" : "3";
+  let secNum = hayDatosSupervision ? 4 : 3;
   seccion(doc, `${secNum}. Resumen de Horas-Hombre`, y, PW);
   y += 14;
 
@@ -335,7 +343,7 @@ export function generarInformeOT(ot: OTData): void {
 
   autoTable(doc, {
     startY: y,
-    margin: { left: 15, right: 80 }, // tabla angosta centrada
+    margin: { left: 15, right: 80 },
     head: [["Concepto", "Valor"]],
     body: [
       ["HH Estimadas (total)", totalEst > 0 ? `${totalEst} h` : "—"],
@@ -361,7 +369,111 @@ export function generarInformeOT(ot: OTData): void {
 
   y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
 
-  // ── Firma / sello ────────────────────────────────────────────────────────────
+  // ── 5. EVIDENCIAS (fotos y documentos) ─────────────────────────────────────
+  if (todosAdjuntos.length > 0) {
+    secNum = hayDatosSupervision ? 5 : 4;
+    y = checkPage(doc, y, 30);
+    seccion(doc, `${secNum}. Evidencias Fotográficas y Documentos`, y, PW);
+    y += 14;
+
+    // ── Fotos ──────────────────────────────────────────────────────────────
+    if (fotos.length > 0) {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7.5);
+      doc.setTextColor(...AZUL);
+      doc.text("Fotos / Imágenes", 15, y);
+      y += 5;
+
+      const IMG_W = 52;
+      const IMG_H = 40;
+      const GAP   = 6;
+      const COLS  = 3;
+      const COL_W = IMG_W + GAP;
+
+      for (let i = 0; i < fotos.length; i++) {
+        const col = i % COLS;
+        const xImg = 15 + col * COL_W;
+
+        if (col === 0 && i > 0) y += IMG_H + 22;
+        y = checkPage(doc, y, IMG_H + 22);
+
+        const adj = fotos[i];
+
+        // Imagen
+        try {
+          const ext = adj.dataUrl.startsWith("data:image/png") ? "PNG" : "JPEG";
+          doc.addImage(adj.dataUrl, ext, xImg, y, IMG_W, IMG_H);
+        } catch {
+          // Si falla la imagen, dibujar placeholder
+          doc.setFillColor(...GRIS_L);
+          doc.rect(xImg, y, IMG_W, IMG_H, "F");
+          doc.setFontSize(7);
+          doc.setTextColor(...GRIS);
+          doc.text("[imagen no disponible]", xImg + IMG_W / 2, y + IMG_H / 2, { align: "center" });
+        }
+
+        // Nombre del archivo + TAG
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(6.5);
+        doc.setTextColor(...NAVY);
+        doc.text(`TAG: ${adj.tag}`, xImg, y + IMG_H + 3.5);
+
+        // Comentario principal
+        const comentarioTexto = adj.comentario || "Sin comentario";
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(6);
+        doc.setTextColor(...NEGRO);
+        const lineasComentario = doc.splitTextToSize(comentarioTexto, IMG_W);
+        doc.text(lineasComentario.slice(0, 2), xImg, y + IMG_H + 7);
+
+        // Comentarios extra
+        if (adj.comentariosExtra?.length > 0) {
+          doc.setTextColor(...GRIS);
+          adj.comentariosExtra.slice(0, 2).forEach((ce, ci) => {
+            const lineasExtra = doc.splitTextToSize(`• ${ce}`, IMG_W);
+            doc.text(lineasExtra[0], xImg, y + IMG_H + 11 + ci * 4);
+          });
+        }
+      }
+
+      // Avanzar y después del último bloque de fotos
+      const lastCol = (fotos.length - 1) % COLS;
+      if (lastCol >= 0) y += IMG_H + 22;
+      y += 4;
+    }
+
+    // ── Documentos ─────────────────────────────────────────────────────────
+    if (documentos.length > 0) {
+      y = checkPage(doc, y, 20);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7.5);
+      doc.setTextColor(...AZUL);
+      doc.text("Documentos adjuntos", 15, y);
+      y += 5;
+
+      autoTable(doc, {
+        startY: y,
+        margin: { left: 15, right: 15 },
+        head: [["TAG", "Archivo", "Comentario"]],
+        body: documentos.map(d => [
+          d.tag,
+          d.nombre,
+          [d.comentario, ...(d.comentariosExtra ?? [])].filter(Boolean).join(" · ") || "—",
+        ]),
+        headStyles: { fillColor: NAVY, textColor: BLANCO, fontSize: 7, fontStyle: "bold", cellPadding: 2.5 },
+        bodyStyles: { fontSize: 7.5, cellPadding: 2.5, textColor: NEGRO },
+        alternateRowStyles: { fillColor: GRIS_L },
+        columnStyles: {
+          0: { cellWidth: 25, fontStyle: "bold" },
+          1: { cellWidth: 55 },
+          2: {},
+        },
+      });
+      y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
+    }
+  }
+
+  // ── Firma / sello ─────────────────────────────────────────────────────────
   y = checkPage(doc, y, 28);
   const midX = PW / 2;
 
@@ -376,7 +488,6 @@ export function generarInformeOT(ot: OTData): void {
   doc.text("Técnico Responsable", (30 + midX - 8) / 2, y + 20, { align: "center" });
   doc.text("Supervisor / Revisor", (midX + 8 + PW - 30) / 2, y + 20, { align: "center" });
 
-  // Nombre técnico debajo de la línea
   if (tecnicos !== "—") {
     doc.setFontSize(7.5);
     doc.setFont("helvetica", "bold");
@@ -390,12 +501,11 @@ export function generarInformeOT(ot: OTData): void {
     doc.text(sup, (midX + 8 + PW - 30) / 2, y + 25, { align: "center" });
   }
 
-  // ── Pie de página ─────────────────────────────────────────────────────────
+  // ── Pie de página ──────────────────────────────────────────────────────────
   const totalPages = doc.getNumberOfPages();
   for (let i = 1; i <= totalPages; i++) {
     doc.setPage(i);
     const PH = doc.internal.pageSize.getHeight();
-    // Línea navy + gris claro
     doc.setFillColor(...NAVY);
     doc.rect(0, PH - 10, PW, 10, "F");
     doc.setFont("helvetica", "normal");
@@ -408,7 +518,7 @@ export function generarInformeOT(ot: OTData): void {
   doc.save(`Informe_OT_${numOT}_${new Date().toISOString().slice(0, 10)}.pdf`);
 }
 
-// ── Verificar salto de página ─────────────────────────────────────────────────
+// ── Verificar salto de página ──────────────────────────────────────────────────
 function checkPage(doc: jsPDF, y: number, espacio: number): number {
   const PH = doc.internal.pageSize.getHeight();
   if (y + espacio > PH - 18) { doc.addPage(); return 20; }
