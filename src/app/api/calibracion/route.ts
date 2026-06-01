@@ -6,7 +6,7 @@ import { NextRequest } from "next/server";
 // (inicializado en docker-start.sh) para que el próximo sea 278.
 async function siguienteCertificado(tag: string, fecha: string): Promise<string> {
   const year = new Date(fecha + "T12:00:00").getFullYear();
-  const dateStr = fecha.replace(/-/g, ""); // 20260601
+  const dateStr = fecha.slice(0, 10).replace(/-/g, ""); // 20260601
   // TAG limpio: mantener alfanuméricos y guiones, sin barras ni espacios
   const tagLimpio = tag.replace(/[/\\*?:"<>| ]/g, "").toUpperCase();
   const counter = await prisma.contador.upsert({

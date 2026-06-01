@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
+import type React from "react";
 
 // Página pública — accesible sin autenticación vía QR
 // URL: /pub/cal/{numeroCertificado}
@@ -9,7 +10,10 @@ type Params = { params: Promise<{ cert: string }> };
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { cert } = await params;
-  return { title: `Certificado ${decodeURIComponent(cert)} — MSC` };
+  return {
+    title: `Certificado ${decodeURIComponent(cert)} — MSC`,
+    viewport: "width=device-width, initial-scale=1",
+  };
 }
 
 function fmt(d?: Date | string | null) {
@@ -25,6 +29,17 @@ const RESULTADO_STYLE: Record<string, { bg: string; color: string; border: strin
   AJUSTADO:  { bg: "#fef3c7", color: "#b45309", border: "#d97706" },
 };
 
+function Field({ label, value, mono, highlight }: { label: string; value: React.ReactNode; mono?: boolean; highlight?: string }) {
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 3, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</div>
+      <div style={{ fontWeight: 700, fontSize: 14, color: highlight ?? "#1e293b", fontFamily: mono ? "monospace" : undefined, wordBreak: "break-all" }}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
 export default async function PublicCertPage({ params }: Params) {
   const { cert } = await params;
   const numeroCertificado = decodeURIComponent(cert);
@@ -37,116 +52,100 @@ export default async function PublicCertPage({ params }: Params) {
 
   const rs = RESULTADO_STYLE[registro.resultadoGeneral] ?? RESULTADO_STYLE.APROBADO;
 
-  // Calcular próxima calibración (1 año desde la fecha)
   const proxima = new Date(registro.fecha);
   proxima.setUTCFullYear(proxima.getUTCFullYear() + 1);
+  const vencida = proxima < new Date();
 
   return (
-    <div style={{ minHeight: "100vh", background: "#f1f5f9", fontFamily: "Arial, Helvetica, sans-serif" }}>
+    <>
+      <style>{`
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background: #f1f5f9; font-family: Arial, Helvetica, sans-serif; }
+      `}</style>
 
-      {/* Header */}
-      <div style={{ background: "#0d2f5e", padding: "14px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div>
-          <div style={{ color: "white", fontWeight: 800, fontSize: 16, letterSpacing: "0.04em" }}>MINERA SAN CRISTÓBAL</div>
-          <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 11 }}>Certificado de Calibración — Verificación pública</div>
+      <div style={{ minHeight: "100vh", background: "#f1f5f9" }}>
+
+        {/* Header */}
+        <div style={{ background: "#0d2f5e", padding: "14px 20px" }}>
+          <div style={{ color: "white", fontWeight: 800, fontSize: 15, letterSpacing: "0.04em" }}>MINERA SAN CRISTÓBAL</div>
+          <div style={{ color: "rgba(255,255,255,0.65)", fontSize: 11, marginTop: 2 }}>Laboratorio de Instrumentación · Verificación de Certificado</div>
         </div>
-        <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 10, textAlign: "right" }}>
-          <div>Laboratorio de Instrumentación</div>
-          <div>sync-msc.up.railway.app</div>
-        </div>
-      </div>
 
-      {/* Banda de resultado */}
-      <div style={{ background: rs.bg, borderBottom: `3px solid ${rs.border}`, padding: "12px 24px", display: "flex", alignItems: "center", gap: 12 }}>
-        <div style={{ width: 14, height: 14, borderRadius: "50%", background: rs.border, flexShrink: 0 }} />
-        <div>
-          <span style={{ fontWeight: 800, fontSize: 18, color: rs.color, letterSpacing: "0.06em" }}>
-            {registro.resultadoGeneral}
-          </span>
-          <span style={{ fontSize: 12, color: rs.color, marginLeft: 12 }}>
-            Resultado de calibración
-          </span>
-        </div>
-      </div>
-
-      <div style={{ maxWidth: 560, margin: "24px auto", padding: "0 16px 40px" }}>
-
-        {/* TAG principal */}
-        <div style={{ background: "white", borderRadius: 12, border: "1px solid #e2e8f0", padding: "20px 24px", marginBottom: 16, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-          <div style={{ fontSize: 32, fontWeight: 900, color: "#0d2f5e", letterSpacing: "0.04em", marginBottom: 4 }}>
-            {registro.tag}
-          </div>
-          <div style={{ fontSize: 14, color: "#475569", marginBottom: 12 }}>{registro.descripcionInstrumento}</div>
-          <div style={{ display: "inline-block", fontSize: 11, fontWeight: 700, color: "#64748b", background: "#f1f5f9", borderRadius: 4, padding: "3px 10px" }}>
-            {registro.tipoVariable}
+        {/* Banda resultado */}
+        <div style={{ background: rs.bg, borderBottom: `3px solid ${rs.border}`, padding: "14px 20px", display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ width: 16, height: 16, borderRadius: "50%", background: rs.border, flexShrink: 0 }} />
+          <div>
+            <div style={{ fontWeight: 900, fontSize: 20, color: rs.color, letterSpacing: "0.08em" }}>
+              {registro.resultadoGeneral}
+            </div>
+            <div style={{ fontSize: 12, color: rs.color, marginTop: 1 }}>Resultado de calibración</div>
           </div>
         </div>
 
-        {/* Info principal */}
-        <div style={{ background: "white", borderRadius: 12, border: "1px solid #e2e8f0", padding: "20px 24px", marginBottom: 16, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-          <div style={{ fontWeight: 700, fontSize: 12, color: "#64748b", letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 14 }}>Datos del Certificado</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px 24px" }}>
-            <div>
-              <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 2 }}>Certificado N°</div>
-              <div style={{ fontWeight: 700, fontSize: 13, color: "#0d2f5e", fontFamily: "monospace" }}>{registro.numeroCertificado}</div>
+        <div style={{ maxWidth: 520, margin: "0 auto", padding: "20px 16px 48px" }}>
+
+          {/* TAG */}
+          <div style={{ background: "white", borderRadius: 12, border: "1px solid #e2e8f0", padding: "20px 20px 16px", marginBottom: 12, boxShadow: "0 1px 6px rgba(0,0,0,0.07)" }}>
+            <div style={{ fontSize: 34, fontWeight: 900, color: "#0d2f5e", letterSpacing: "0.04em", lineHeight: 1 }}>
+              {registro.tag}
             </div>
-            <div>
-              <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 2 }}>Área</div>
-              <div style={{ fontWeight: 600, fontSize: 13, color: "#1e293b" }}>{registro.areaCodigo}</div>
+            <div style={{ fontSize: 14, color: "#475569", marginTop: 6, marginBottom: 10 }}>{registro.descripcionInstrumento}</div>
+            <span style={{ display: "inline-block", fontSize: 11, fontWeight: 700, color: "#64748b", background: "#f1f5f9", borderRadius: 4, padding: "3px 10px" }}>
+              {registro.tipoVariable}
+            </span>
+          </div>
+
+          {/* Datos del certificado — una sola columna para que no se comprima */}
+          <div style={{ background: "white", borderRadius: 12, border: "1px solid #e2e8f0", padding: "18px 20px", marginBottom: 12, boxShadow: "0 1px 6px rgba(0,0,0,0.07)" }}>
+            <div style={{ fontWeight: 700, fontSize: 11, color: "#64748b", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 16 }}>Datos del Certificado</div>
+
+            <Field label="Certificado N°" value={registro.numeroCertificado} mono />
+            <Field label="Área" value={registro.areaCodigo} />
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 20px" }}>
+              <Field label="Fecha de Calibración" value={fmt(registro.fecha)} />
+              <Field
+                label="Próxima Calibración"
+                value={<>{fmt(proxima)}{vencida && <span style={{ fontSize: 10, marginLeft: 6, background: "#dc2626", color: "white", borderRadius: 3, padding: "1px 5px", verticalAlign: "middle" }}>VENCIDA</span>}</>}
+                highlight={vencida ? "#dc2626" : "#15803d"}
+              />
             </div>
-            <div>
-              <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 2 }}>Fecha de Calibración</div>
-              <div style={{ fontWeight: 700, fontSize: 14, color: "#1e293b" }}>{fmt(registro.fecha)}</div>
-            </div>
-            <div>
-              <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 2 }}>Próxima Calibración</div>
-              <div style={{ fontWeight: 700, fontSize: 14, color: proxima < new Date() ? "#dc2626" : "#16a34a" }}>
-                {fmt(proxima)}
-                {proxima < new Date() && <span style={{ fontSize: 10, marginLeft: 6, color: "#dc2626" }}>VENCIDA</span>}
-              </div>
-            </div>
-            <div>
-              <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 2 }}>Técnico Calibrador</div>
-              <div style={{ fontWeight: 600, fontSize: 13, color: "#1e293b" }}>{registro.tecnicoNombre}</div>
-            </div>
+
+            <Field label="Técnico Calibrador" value={registro.tecnicoNombre} />
             {registro.supervisorNombre && (
-              <div>
-                <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 2 }}>Aprobado por</div>
-                <div style={{ fontWeight: 600, fontSize: 13, color: "#1e293b" }}>{registro.supervisorNombre}</div>
-              </div>
+              <Field label="Aprobado por" value={registro.supervisorNombre} />
             )}
           </div>
-        </div>
 
-        {/* Patrones */}
-        {registro.patronCodigos.length > 0 && (
-          <div style={{ background: "white", borderRadius: 12, border: "1px solid #e2e8f0", padding: "16px 24px", marginBottom: 16, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-            <div style={{ fontWeight: 700, fontSize: 12, color: "#64748b", letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 10 }}>Patrones Utilizados</div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {registro.patronCodigos.map((p, i) => (
-                <span key={i} style={{ background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe", borderRadius: 6, padding: "4px 12px", fontSize: 12, fontWeight: 600, fontFamily: "monospace" }}>
-                  {p}
-                </span>
-              ))}
+          {/* Patrones */}
+          {registro.patronCodigos.length > 0 && (
+            <div style={{ background: "white", borderRadius: 12, border: "1px solid #e2e8f0", padding: "16px 20px", marginBottom: 12, boxShadow: "0 1px 6px rgba(0,0,0,0.07)" }}>
+              <div style={{ fontWeight: 700, fontSize: 11, color: "#64748b", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 12 }}>Patrones Utilizados</div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {registro.patronCodigos.map((p, i) => (
+                  <span key={i} style={{ background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe", borderRadius: 6, padding: "5px 12px", fontSize: 13, fontWeight: 700, fontFamily: "monospace" }}>
+                    {p}
+                  </span>
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Observaciones */}
-        {registro.observaciones && (
-          <div style={{ background: "#fffbeb", borderRadius: 12, border: "1px solid #fde68a", padding: "14px 24px", marginBottom: 16 }}>
-            <div style={{ fontWeight: 700, fontSize: 11, color: "#92400e", marginBottom: 4 }}>Observaciones</div>
-            <p style={{ fontSize: 13, color: "#78350f" }}>{registro.observaciones}</p>
-          </div>
-        )}
+          {/* Observaciones */}
+          {registro.observaciones && (
+            <div style={{ background: "#fffbeb", borderRadius: 12, border: "1px solid #fde68a", padding: "14px 20px", marginBottom: 12 }}>
+              <div style={{ fontWeight: 700, fontSize: 11, color: "#92400e", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Observaciones</div>
+              <p style={{ fontSize: 13, color: "#78350f", lineHeight: 1.5 }}>{registro.observaciones}</p>
+            </div>
+          )}
 
-        {/* Pie */}
-        <div style={{ textAlign: "center", fontSize: 11, color: "#94a3b8", lineHeight: 1.6, padding: "0 8px" }}>
-          <p>Este certificado fue generado por el Sistema SYNC MSC de Minera San Cristóbal.</p>
-          <p>Válido para gestión interna según normas ISO 17025.</p>
-          <p style={{ marginTop: 8, fontWeight: 600, color: "#64748b" }}>Verificado en línea · {new Date().toLocaleDateString("es-BO")}</p>
+          {/* Pie */}
+          <div style={{ textAlign: "center", fontSize: 11, color: "#94a3b8", lineHeight: 1.7, marginTop: 8 }}>
+            <p>Certificado generado por el Sistema SYNC MSC · Minera San Cristóbal</p>
+            <p>Válido para gestión interna según normas ISO 17025</p>
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
