@@ -88,8 +88,8 @@ function pct(val: number, total: number) {
 
 function fmtFecha(date: Date, formato: "corto" | "largo" = "corto") {
   if (formato === "largo")
-    return date.toLocaleDateString("es-BO", { day: "2-digit", month: "short", year: "numeric" });
-  return date.toLocaleDateString("es-BO", { day: "2-digit", month: "short" });
+    return date.toLocaleDateString("es-BO", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" });
+  return date.toLocaleDateString("es-BO", { day: "2-digit", month: "short", timeZone: "UTC" });
 }
 
 // ─── Badge de Estado ──────────────────────────────────────────────────────────
@@ -714,7 +714,7 @@ function CargaCSVModal({
 
       const lunes   = getMondayOfWeek(anio, semana);
       const domingo = new Date(lunes);
-      domingo.setDate(lunes.getDate() + 6);
+      domingo.setUTCDate(lunes.getUTCDate() + 6);
 
       const res = await fetch("/api/programacion-semanal", {
         method: "POST",
@@ -869,7 +869,7 @@ export default function SemanalesPage() {
     const fd: Record<DiaSemana, Date> = {} as Record<DiaSemana, Date>;
     DIAS.forEach((d, i) => {
       const f = new Date(lunes);
-      f.setDate(lunes.getDate() + i);
+      f.setUTCDate(lunes.getUTCDate() + i);
       fd[d] = f;
     });
     return fd;
