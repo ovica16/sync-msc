@@ -209,6 +209,7 @@ export default function ReporteOTPage() {
   // Modo edición con trazabilidad
   const [editMode, setEditMode] = useState(false);
   const [editLineas, setEditLineas] = useState<Linea[]>([]);
+  const [editOtJdeNumero, setEditOtJdeNumero] = useState("");
   const [tareaInputs, setTareaInputs] = useState<string[]>([]);
   const [itemCheckInputs, setItemCheckInputs] = useState<string[]>([]);
 
@@ -268,6 +269,7 @@ export default function ReporteOTPage() {
     setEditLineas(selected.lineas.map((l) => ({ ...l })));
     setTareaInputs(selected.lineas.map(() => ""));
     setItemCheckInputs(selected.lineas.map(() => ""));
+    setEditOtJdeNumero(selected.otJdeNumero ?? "");
     setEditMode(true);
   }
 
@@ -360,7 +362,13 @@ export default function ReporteOTPage() {
       const res = await fetch(`/api/ordenes/${selected._id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lineas: editLineas, cambios, usuarioId: user?.id ?? "sistema", nombreUsuario: user?.nombre ?? "Sistema" }),
+        body: JSON.stringify({
+          lineas: editLineas,
+          cambios,
+          otJdeNumero: editOtJdeNumero.trim() || null,
+          usuarioId: user?.id ?? "sistema",
+          nombreUsuario: user?.nombre ?? "Sistema",
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Error al guardar");
@@ -476,7 +484,7 @@ export default function ReporteOTPage() {
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap", marginBottom: 4 }}>
-                          <span style={{ fontWeight: 800, fontSize: 15, color: "#0f2847" }}>#{ot.numeroOT}</span>
+                          <span style={{ fontWeight: 800, fontSize: 15, color: "#0f2847" }}>{ot.otJdeNumero ? `OT ${ot.otJdeNumero}` : `#${ot.numeroOT}`}</span>
                           <span style={S.badge(color)}>{ESTADO_LABEL[ot.estado]}</span>
                           {ot.lineas.map((l, i) => <span key={i} style={S.badge(TIPO_COLOR[l.tipoOT] ?? "#64748b")}>{l.tipoOT}</span>)}
                         </div>
@@ -529,7 +537,7 @@ export default function ReporteOTPage() {
                           style={{ background: "white", borderRadius: 10, border: `1px solid ${col.color}30`, padding: "10px 12px", borderTop: `3px solid ${col.color}` }}
                         >
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                            <span style={{ fontWeight: 800, fontSize: 13, color: "#0f2847" }}>#{ot.numeroOT}</span>
+                            <span style={{ fontWeight: 800, fontSize: 13, color: "#0f2847" }}>{ot.otJdeNumero ? `OT ${ot.otJdeNumero}` : `#${ot.numeroOT}`}</span>
                             <span style={{ fontSize: 10, color: "#94a3b8" }}>{new Date(ot.fecha).toLocaleDateString("es-BO", { day: "2-digit", month: "2-digit" })}</span>
                           </div>
                           {/* Badge origen: plan vs reactiva */}
@@ -662,11 +670,13 @@ export default function ReporteOTPage() {
           <button onClick={() => setSelected(null)} style={{ ...S.btnGhost, padding: "7px 14px" }}>← Lista</button>
           <div style={{ flex: 1 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-              <h1 style={{ fontSize: 20, fontWeight: 800, color: "#0f2847" }}>OT #{ot.numeroOT}</h1>
+              <h1 style={{ fontSize: 20, fontWeight: 800, color: "#0f2847" }}>
+                {ot.otJdeNumero ? `OT ${ot.otJdeNumero}` : `OT #${ot.numeroOT}`}
+              </h1>
               <span style={S.badge(estadoColor)}>{ESTADO_LABEL[ot.estado]}</span>
               {ot.origenPlan ? (
                 <span style={{ ...S.badge("#1d4ed8"), fontSize: 11 }}>
-                  📋 Plan Semanal · JDE {ot.otJdeNumero}{ot.otJdeDia ? ` · ${ot.otJdeDia}` : ""}
+                  📋 Plan Semanal{ot.otJdeDia ? ` · ${ot.otJdeDia}` : ""}
                 </span>
               ) : (
                 <span style={{ ...S.badge("#dc2626"), fontSize: 11 }}>⚡ Reactiva</span>
@@ -702,6 +712,22 @@ export default function ReporteOTPage() {
             <div style={{ gridColumn: "1 / -1" }}>
               <span style={S.label}>Técnico(s)</span>
               <p style={{ fontSize: 14, color: "#1e293b" }}>{ot.tecnicos.map((t) => t.nombreCompleto).join(", ")}</p>
+            </div>
+            <div style={{ gridColumn: "1 / -1" }}>
+              <span style={S.label}>N° OT JDE / OPEPLANT</span>
+              {editMode ? (
+                <input
+                  type="text"
+                  value={editOtJdeNumero}
+                  onChange={e => setEditOtJdeNumero(e.target.value)}
+                  placeholder="ej. 892867"
+                  style={{ marginTop: 4, padding: "6px 10px", border: "1px solid #fcd34d", borderRadius: 6, fontSize: 14, fontFamily: "monospace", width: 180, background: "#fffbeb" }}
+                />
+              ) : (
+                <p style={{ fontSize: 14, color: ot.otJdeNumero ? "#1e293b" : "#94a3b8", fontFamily: ot.otJdeNumero ? "monospace" : "inherit", fontWeight: ot.otJdeNumero ? 700 : 400 }}>
+                  {ot.otJdeNumero ?? "Sin vincular"}
+                </p>
+              )}
             </div>
           </div>
         </div>
