@@ -27,12 +27,11 @@ const migraciones = [
       console.log('[migrate] Skip:', e.message.slice(0, 100));
     }
   }
-  // Resetear OtProgramada huérfanas (apuntan a OrdenTrabajo eliminadas)
+  // Resetear OtProgramada huérfanas (apuntan a OrdenTrabajo eliminadas) — cualquier estado
   try {
     const res = await pool.query(`
       UPDATE "OtProgramada" SET estado = 'pendiente', "ordenTrabajoId" = NULL, "ordenTrabajoNum" = NULL
-      WHERE estado = 'en_proceso'
-        AND "ordenTrabajoId" IS NOT NULL
+      WHERE "ordenTrabajoId" IS NOT NULL
         AND "ordenTrabajoId" NOT IN (SELECT id FROM "OrdenTrabajo")
     `);
     console.log('[migrate] OtProgramada huérfanas reseteadas:', res.rowCount);
