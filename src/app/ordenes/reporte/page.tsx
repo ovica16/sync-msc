@@ -28,10 +28,8 @@ type Linea = {
 };
 
 type SupForm = {
-  clasificacionRCM: string;
-  codigoModoFallaISO: string;
-  requierePlanificacion: boolean;
-  comentariosSupervisor: string;
+  requierePlanificacion: boolean; // "Requiere WR" en UI
+  comentariosSupervisor: string;  // separado por "\n" para múltiples comentarios
   generaOtHallazgo: boolean | null;
   otGenerada: string;
 };
@@ -98,7 +96,7 @@ const CLASIFICACIONES_RCM = [
 ];
 
 const EMPTY_SUP: SupForm = {
-  clasificacionRCM: "", codigoModoFallaISO: "", requierePlanificacion: false,
+  requierePlanificacion: false,
   comentariosSupervisor: "", generaOtHallazgo: null, otGenerada: "",
 };
 
@@ -203,6 +201,7 @@ export default function ReporteOTPage() {
 
   // Supervisión
   const [supForm, setSupForm] = useState<SupForm>(EMPTY_SUP);
+  const [supComentarioInput, setSupComentarioInput] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveErr, setSaveErr] = useState("");
 
@@ -242,8 +241,6 @@ export default function ReporteOTPage() {
     if (!selected) { setEditMode(false); return; }
     const d = selected.datosSupervision ?? {};
     setSupForm({
-      clasificacionRCM: d.clasificacionRCM ?? "",
-      codigoModoFallaISO: d.codigoModoFallaISO ?? "",
       requierePlanificacion: d.requierePlanificacion ?? false,
       comentariosSupervisor: d.comentariosSupervisor ?? "",
       generaOtHallazgo: (d as { generaOtHallazgo?: boolean | null }).generaOtHallazgo ?? null,
@@ -665,7 +662,7 @@ export default function ReporteOTPage() {
   // Botón concluir: supervisores/admins en revisado
   const canConcluir = esSup && ot.estado === "revisado";
 
-  const showSupReadonly = !showSupForm && !isConcluido && !!(ot.datosSupervision?.comentariosSupervisor || ot.datosSupervision?.clasificacionRCM || ot.datosSupervision?.codigoModoFallaISO);
+  const showSupReadonly = !showSupForm && !isConcluido && !!(ot.datosSupervision?.comentariosSupervisor || ot.datosSupervision?.requierePlanificacion);
   const hasReactivas = ot.lineas.some((l) => l.tipoOT === "CMP" || l.tipoOT === "CMR");
 
   return (
@@ -997,29 +994,7 @@ export default function ReporteOTPage() {
           <div style={S.card}>
             <div style={{ fontWeight: 700, fontSize: 13, color: "#0f2847", marginBottom: 14 }}>Datos de Supervisión</div>
 
-            {/* CMP / CMR — correctivos: RCM + Código Modo de Falla */}
-            {hasReactivas && (
-              <>
-                <div style={{ marginBottom: 12 }}>
-                  <label style={S.label}>Tipo de Actividad (RCM)</label>
-                  <select value={supForm.clasificacionRCM} onChange={(e) => patchSup({ clasificacionRCM: e.target.value })} style={S.select}>
-                    <option value="">— Seleccionar —</option>
-                    {CLASIFICACIONES_RCM.map((c) => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-                <div style={{ marginBottom: 12 }}>
-                  <label style={S.label}>Código Modo de Falla (ISO 14224)</label>
-                  <input
-                    value={supForm.codigoModoFallaISO}
-                    onChange={(e) => patchSup({ codigoModoFallaISO: e.target.value })}
-                    placeholder="Ej: EL-MOT-FASE-01"
-                    style={S.input}
-                  />
-                </div>
-              </>
-            )}
-
-            {/* PMP / PMT / PTJ — preventivos: Genera OT de Hallazgo */}
+            {/* Preventivos: Genera OT de Hallazgo */}
             {!hasReactivas && (
               <>
                 <div style={{ marginBottom: 12 }}>
@@ -1056,12 +1031,55 @@ export default function ReporteOTPage() {
             <div style={{ marginBottom: 12 }}>
               <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
                 <input type="checkbox" checked={supForm.requierePlanificacion} onChange={(e) => patchSup({ requierePlanificacion: e.target.checked })} style={{ width: 16, height: 16, accentColor: "#2563eb" }} />
-                <span style={{ fontSize: 13, color: "#374151" }}>Requiere planificación</span>
+                <span style={{ fontSize: 13, color: "#374151" }}>Requiere WR</span>
               </label>
             </div>
+
+            {/* Comentarios del supervisor — múltiples */}
             <div>
               <label style={S.label}>Comentarios del supervisor</label>
-              <textarea value={supForm.comentariosSupervisor} onChange={(e) => patchSup({ comentariosSupervisor: e.target.value })} placeholder="Comentarios adicionales" style={{ ...S.textarea, minHeight: 56 }} />
+              {/* Lista de comentarios ya agregados */}
+              {supForm.comentariosSupervisor && supForm.comentariosSupervisor.split("\n").filter(Boolean).map((c, ci) => (
+                <div key={ci} style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 6 }}>
+                  <span style={{ flex: 1, fontSize: 13, color: "#1e293b", background: "#f8fafc", borderRadius: 6, padding: "6px 10px", border: "1px solid #e2e8f0", lineHeight: 1.5 }}>{c}</span>
+                  <button type="button"
+                    onClick={() => {
+                      const lines = supForm.comentariosSupervisor.split("\n").filter(Boolean);
+                      patchSup({ comentariosSupervisor: lines.filter((_, j) => j !== ci).join("\n") });
+                    }}
+                    style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 15, paddingTop: 4 }}>✕</button>
+                </div>
+              ))}
+              {/* Input + Agregar */}
+              <div style={{ display: "flex", gap: 8 }}>
+                <input
+                  value={supComentarioInput}
+                  onChange={e => setSupComentarioInput(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      const txt = supComentarioInput.trim();
+                      if (!txt) return;
+                      const prev = supForm.comentariosSupervisor;
+                      patchSup({ comentariosSupervisor: prev ? prev + "\n" + txt : txt });
+                      setSupComentarioInput("");
+                    }
+                  }}
+                  placeholder="Agregar comentario — Enter para confirmar"
+                  style={{ ...S.input, fontSize: 13, flex: 1 }}
+                />
+                <button type="button"
+                  onClick={() => {
+                    const txt = supComentarioInput.trim();
+                    if (!txt) return;
+                    const prev = supForm.comentariosSupervisor;
+                    patchSup({ comentariosSupervisor: prev ? prev + "\n" + txt : txt });
+                    setSupComentarioInput("");
+                  }}
+                  style={{ background: "white", color: "#2563eb", border: "1px solid #2563eb", borderRadius: 8, padding: "9px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" as const }}>
+                  + Agregar
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -1071,14 +1089,16 @@ export default function ReporteOTPage() {
           <div style={S.card}>
             <div style={{ fontWeight: 700, fontSize: 13, color: "#0f2847", marginBottom: 12 }}>Datos de Supervisión</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {ot.datosSupervision.clasificacionRCM && (
-                <div><span style={S.label}>Tipo de Actividad (RCM)</span><p style={{ fontSize: 13 }}>{ot.datosSupervision.clasificacionRCM}</p></div>
-              )}
-              {ot.datosSupervision.codigoModoFallaISO && (
-                <div><span style={S.label}>Código Modo de Falla</span><p style={{ fontSize: 13 }}>{ot.datosSupervision.codigoModoFallaISO}</p></div>
+              {ot.datosSupervision.requierePlanificacion && (
+                <div><span style={S.label}>Requiere WR</span><p style={{ fontSize: 13 }}>Sí</p></div>
               )}
               {ot.datosSupervision.comentariosSupervisor && (
-                <div><span style={S.label}>Comentarios del Supervisor</span><p style={{ fontSize: 13, lineHeight: 1.6 }}>{ot.datosSupervision.comentariosSupervisor}</p></div>
+                <div>
+                  <span style={S.label}>Comentarios del Supervisor</span>
+                  {ot.datosSupervision.comentariosSupervisor.split("\n").filter(Boolean).map((c, ci) => (
+                    <p key={ci} style={{ fontSize: 13, lineHeight: 1.6, padding: "4px 0", borderBottom: "1px solid #f1f5f9" }}>{c}</p>
+                  ))}
+                </div>
               )}
             </div>
           </div>
