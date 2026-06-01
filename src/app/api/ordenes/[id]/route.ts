@@ -38,6 +38,7 @@ function serializeOT(ot: Record<string, unknown> & {
       tiempoEstimadoHrs: l.tiempoEstimadoHrs, tiempoRealHrs: l.tiempoRealHrs,
       descripcionTrabajo: l.descripcionTrabajo, tareasEjecutadas: l.tareasEjecutadas,
       observaciones: l.observaciones,
+      adjuntos: l.adjuntos ?? [],
     })),
     historialCambios: (ot.historial ?? []).map(h => ({
       fechaHora: h.fechaHora, usuarioId: h.usuarioId,
