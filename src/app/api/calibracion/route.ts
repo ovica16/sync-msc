@@ -56,7 +56,8 @@ export async function POST(req: NextRequest) {
         resultadoGeneral: body.resultadoGeneral,
         observaciones: body.observaciones ?? null,
         otAsociada: body.otAsociada ?? null,
-        estado: body.estado ?? "revision",
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ...({ estado: body.estado ?? "revision" } as any),
         tecnicoFirma: body.tecnicoFirma ?? null,
         supervisorFirma: body.supervisorFirma ?? null,
         areaCodigo: "3320",
