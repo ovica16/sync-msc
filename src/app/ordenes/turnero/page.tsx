@@ -123,11 +123,16 @@ export default function TurneroPage() {
   const cargar = useCallback(async () => {
     setLoading(true);
     try {
-      // 1. Cargar programación semanal
+      // 1. Cargar programación semanal — filtrada por áreas del usuario
+      const userAreas: string[] = user?.areas ?? [];
       const progData = await fetch(
-        `/api/programacion-semanal?semana=${semana}&anio=${anio}&limit=10`
+        `/api/programacion-semanal?semana=${semana}&anio=${anio}&limit=20`
       ).then(r => r.json()).catch(() => []);
-      const progs: Programa[] = Array.isArray(progData) ? progData : [];
+      const todosProgs: Programa[] = Array.isArray(progData) ? progData : [];
+      // Si el usuario tiene áreas asignadas, filtrar solo sus áreas
+      const progs = userAreas.length > 0
+        ? todosProgs.filter(p => p.areaCodigo && userAreas.includes(p.areaCodigo))
+        : todosProgs;
       setProgramas(progs);
 
       // 2. Extraer números OPEPLANT únicos de esta semana
@@ -150,11 +155,15 @@ export default function TurneroPage() {
       );
       const resultados = await Promise.all(promesas);
       const todas: OTReactiva[] = resultados.flat().filter(Boolean);
-      setOtsReactivas(todas);
+      // Filtrar por áreas del usuario si están definidas
+      const filtradas = userAreas.length > 0
+        ? todas.filter(ot => !ot.areaCodigo || userAreas.includes(ot.areaCodigo))
+        : todas;
+      setOtsReactivas(filtradas);
     } finally {
       setLoading(false);
     }
-  }, [semana, anio]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [semana, anio, user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { cargar(); }, [cargar]);
 
