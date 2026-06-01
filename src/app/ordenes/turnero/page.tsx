@@ -228,6 +228,7 @@ export default function TurneroPage() {
   if (!user) return null;
 
   return (
+    <>
     <div style={{ minHeight: "100vh", background: "#f1f5f9" }}>
       <AppHeader backHref="/ordenes" />
 
@@ -484,5 +485,6 @@ export default function TurneroPage() {
         </div>
       </div>
     )}
+    </>
   );
 }
