@@ -28,12 +28,16 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const estado = searchParams.get("estado");
   const turno  = searchParams.get("turno");
+  const tipo   = searchParams.get("tipo");
+  const supervisorId = searchParams.get("supervisorId");
   const limit  = Math.min(Number(searchParams.get("limit") || "50"), 200);
 
   const reportes = await prisma.reporteTurno.findMany({
     where: {
-      ...(estado ? { estado } : {}),
-      ...(turno  ? { turno }  : {}),
+      ...(estado       ? { estado }       : {}),
+      ...(turno        ? { turno }        : {}),
+      ...(tipo         ? { tipo }         : {}),
+      ...(supervisorId ? { supervisorId } : {}),
     },
     orderBy: { fecha: "desc" },
     take: limit,
@@ -70,6 +74,7 @@ export async function POST(req: NextRequest) {
 
     const reporte = await prisma.reporteTurno.create({
       data: {
+        tipo: body.tipo ?? "supervisor",
         turno, fecha: new Date(fecha), supervisorId, supervisorNombre,
         otIds: otIds ?? [],
         otsCriticas: otsCriticas ?? [],

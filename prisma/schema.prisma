@@ -282,6 +282,7 @@ model ResumenDia {
 
 model ReporteTurno {
   id                          String   @id @default(cuid())
+  tipo                        String   @default("supervisor") // supervisor | tecnico
   turno                       String
   fecha                       DateTime
   supervisorId                String
