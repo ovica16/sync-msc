@@ -224,6 +224,9 @@ export default function ReporteOTPage() {
   const [tareaInputs, setTareaInputs] = useState<string[]>([]);
   const [itemCheckInputs, setItemCheckInputs] = useState<string[]>([]);
 
+  // Eliminar OT (solo admin)
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
   // Avance diario (OTs multi-día)
   const [showAvance, setShowAvance]   = useState(false);
   const [avanceTareaInput, setAvanceTareaInput] = useState("");
@@ -511,6 +514,17 @@ export default function ReporteOTPage() {
                       <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, flexShrink: 0 }}>
                         <span style={{ fontSize: 11, color: "#94a3b8" }}>{ot.lineas.length} equipo(s)</span>
                         <span style={{ fontSize: 12, color: "#2563eb", fontWeight: 600 }}>Ver →</span>
+                        {esAdmin && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeletingId(ot._id);
+                            }}
+                            style={{ fontSize: 11, color: "#dc2626", fontWeight: 600, background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                          >
+                            Eliminar
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1315,5 +1329,47 @@ export default function ReporteOTPage() {
 
       </div>
     </div>
+
+    {/* Modal confirmación eliminar */}
+    {deletingId && (
+      <div
+        style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+        onClick={() => setDeletingId(null)}
+      >
+        <div
+          style={{ background: "white", borderRadius: 12, padding: 28, maxWidth: 360, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div style={{ fontWeight: 800, fontSize: 16, color: "#0f2847", marginBottom: 8 }}>Eliminar OT</div>
+          <p style={{ fontSize: 14, color: "#475569", marginBottom: 20, lineHeight: 1.5 }}>
+            Esta acción eliminará permanentemente la OT y todos sus datos (líneas, técnicos, historial). No se puede deshacer.
+          </p>
+          <div style={{ display: "flex", gap: 10 }}>
+            <button
+              onClick={() => setDeletingId(null)}
+              style={{ flex: 1, padding: "10px 0", borderRadius: 8, border: "1px solid #e2e8f0", background: "white", fontWeight: 600, fontSize: 14, cursor: "pointer", color: "#64748b" }}
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={async () => {
+                const id = deletingId;
+                setDeletingId(null);
+                const res = await fetch(`/api/ordenes/${id}`, { method: "DELETE" });
+                if (res.ok) {
+                  setOrdenes(prev => prev.filter(o => o._id !== id));
+                  if (selected?._id === id) setSelected(null);
+                } else {
+                  alert("Error al eliminar la OT");
+                }
+              }}
+              style={{ flex: 1, padding: "10px 0", borderRadius: 8, border: "none", background: "#dc2626", fontWeight: 700, fontSize: 14, cursor: "pointer", color: "white" }}
+            >
+              Eliminar
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
   );
 }
