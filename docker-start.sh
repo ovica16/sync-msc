@@ -27,6 +27,19 @@ const migraciones = [
       console.log('[migrate] Skip:', e.message.slice(0, 100));
     }
   }
+  // Resetear OtProgramada huérfanas (apuntan a OrdenTrabajo eliminadas)
+  try {
+    const res = await pool.query(`
+      UPDATE "OtProgramada" SET estado = 'pendiente', "ordenTrabajoId" = NULL, "ordenTrabajoNum" = NULL
+      WHERE estado = 'en_proceso'
+        AND "ordenTrabajoId" IS NOT NULL
+        AND "ordenTrabajoId" NOT IN (SELECT id FROM "OrdenTrabajo")
+    `);
+    console.log('[migrate] OtProgramada huérfanas reseteadas:', res.rowCount);
+  } catch(e) {
+    console.log('[migrate] Reset huérfanas skip:', e.message.slice(0, 80));
+  }
+
   // Forzar contador 2026 a 277 si está por debajo (corrige arranques previos en 1)
   try {
     await pool.query(
