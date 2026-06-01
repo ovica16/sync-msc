@@ -212,8 +212,8 @@ export default function StickerPage() {
                   </div>
                 </div>
 
-                {/* Right: result badge + QR placeholder */}
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, minWidth: 60 }}>
+                {/* Right: result badge + QR real */}
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, minWidth: 64 }}>
                   <div style={{
                     background: colors.bg,
                     border: `1px solid ${colors.border}`,
@@ -222,36 +222,22 @@ export default function StickerPage() {
                     fontSize: 10,
                     padding: "4px 8px",
                     borderRadius: 4,
-                    textAlign: "center",
+                    textAlign: "center" as const,
                     letterSpacing: "0.04em",
                   }}>
                     {record.resultadoGeneral}
                   </div>
-                  {/* QR placeholder */}
-                  <div style={{
-                    width: 48,
-                    height: 48,
-                    border: "1px solid #e2e8f0",
-                    borderRadius: 4,
-                    background: "#f8fafc",
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 2,
-                  }}>
-                    <div style={{ fontSize: 7, color: "#94a3b8", textAlign: "center", lineHeight: 1.3 }}>
-                      QR<br />CERT
-                    </div>
-                    {/* Simple QR visual placeholder */}
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 5px)", gap: 1 }}>
-                      {Array.from({ length: 16 }, (_, j) => (
-                        <div key={j} style={{
-                          width: 5, height: 5,
-                          background: [0,1,4,5,10,11,14,15,2,7,8,13].includes(j) ? "#0f2847" : "transparent",
-                        }} />
-                      ))}
-                    </div>
+                  {/* QR real que apunta a la página pública del certificado */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={`/api/qr?url=${encodeURIComponent(`${typeof window !== "undefined" ? window.location.origin : "https://sync-msc-production.up.railway.app"}/pub/cal/${encodeURIComponent(record.numeroCertificado)}`)}&size=128`}
+                    alt="QR Certificado"
+                    width={56}
+                    height={56}
+                    style={{ borderRadius: 3, border: "1px solid #e2e8f0" }}
+                  />
+                  <div style={{ fontSize: 6, color: "#94a3b8", textAlign: "center" as const, lineHeight: 1.2 }}>
+                    Escanear<br />para verificar
                   </div>
                 </div>
               </div>

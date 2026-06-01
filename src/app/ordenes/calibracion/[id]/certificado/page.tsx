@@ -518,11 +518,28 @@ export default function CertificadoPage() {
           </div>
         </div>
 
-        {/* ── PIE ───────────────────────────────────────────────────────── */}
-        <div style={{ marginTop: 12, borderTop: "1px solid #e2e8f0", paddingTop: 7, fontSize: 7, color: "#6b7280", lineHeight: 1.7 }}>
-          <div>* Este es un documento generado por el Laboratorio de Instrumentación de M.S.C. Válido para Gestión Interna</div>
-          <div>* El contenido de este certificado está en función de los requisitos de ISO 17025</div>
-          <div>* La Trazabilidad de los patrones sigue las normas nacionales e internacionales</div>
+        {/* ── PIE + QR ──────────────────────────────────────────────────── */}
+        <div style={{ marginTop: 12, borderTop: "1px solid #e2e8f0", paddingTop: 7, display: "flex", alignItems: "flex-end", gap: 16, justifyContent: "space-between" }}>
+          <div style={{ fontSize: 7, color: "#6b7280", lineHeight: 1.7, flex: 1 }}>
+            <div>* Este es un documento generado por el Laboratorio de Instrumentación de M.S.C. Válido para Gestión Interna</div>
+            <div>* El contenido de este certificado está en función de los requisitos de ISO 17025</div>
+            <div>* La Trazabilidad de los patrones sigue las normas nacionales e internacionales</div>
+            <div style={{ marginTop: 4, fontWeight: 700, color: "#475569" }}>
+              Verificar en línea: sync-msc-production.up.railway.app/pub/cal/{record.numeroCertificado}
+            </div>
+          </div>
+          {/* QR para verificación en línea */}
+          <div style={{ textAlign: "center", flexShrink: 0 }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={`/api/qr?url=${encodeURIComponent(`https://sync-msc-production.up.railway.app/pub/cal/${encodeURIComponent(record.numeroCertificado)}`)}&size=160`}
+              alt="QR Certificado"
+              width={72}
+              height={72}
+              style={{ display: "block" }}
+            />
+            <div style={{ fontSize: 6, color: "#94a3b8", marginTop: 2 }}>Escanear para<br />ver en línea</div>
+          </div>
         </div>
       </div>
 
