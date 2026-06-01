@@ -845,6 +845,8 @@ export default function RegistroOTPage() {
   const todayDia = DIA_MAP[now.getDay()];
   const currentSemana = getWeekNumber(now);
   const currentAnio = now.getFullYear();
+  // Cierre OPEPLANT habilitado solo cuando shiftFecha es domingo (getDay()===0)
+  const cierreSemanaHabilitado = new Date(shiftFecha + "T12:00:00").getDay() === 0;
 
   // ── Vista: "inicio" (listado plan) | "registro" (formulario) ──
   const [view, setView] = useState<"inicio" | "registro">("inicio");
@@ -890,47 +892,6 @@ export default function RegistroOTPage() {
     } catch { /* ignore */ }
   }
 
-  // ── Bitácora Guardia ──
-  const [guardiaRef, setGuardiaRef] = useState<PlanRef | null>(null);
-  const [guardiaNota, setGuardiaNota] = useState("");
-  const [guardiaHH, setGuardiaHH] = useState(0);
-  const [savingGuardia, setSavingGuardia] = useState(false);
-
-  const autoTurnoGuardia = () => shiftTurno;
-
-  async function confirmarBitacora() {
-    if (!guardiaRef || !guardiaNota.trim()) return;
-    setSavingGuardia(true);
-    try {
-      await fetch(`/api/programacion-semanal/${guardiaRef.planId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          numeroOT: guardiaRef.ot.numeroOT,
-          dia: guardiaRef.ot.dia,
-          grupo: guardiaRef.ot.grupo, // Diurno o Nocturno — separa los registros
-          bitacoraEntry: {
-            turno: guardiaRef.ot.grupo, // usa el grupo real del plan
-            supervisor: user?.nombre ?? "Supervisor",
-            nota: guardiaNota.trim(),
-            hhAtendidas: guardiaHH,
-          },
-        }),
-      });
-      // Actualizar local
-      setPlanRefs(prev => prev.map(r =>
-        r.planId === guardiaRef.planId && r.ot.numeroOT === guardiaRef.ot.numeroOT
-          ? { ...r, ot: { ...r.ot, esGuardia: true, estado: "en_proceso",
-              bitacora: [...(r.ot.bitacora ?? []), { turno: autoTurnoGuardia(), supervisor: user?.nombre ?? "", nota: guardiaNota.trim(), hhAtendidas: guardiaHH }] } as OTPlan }
-          : r
-      ));
-      setGuardiaRef(null);
-      setGuardiaNota("");
-      setGuardiaHH(0);
-    } finally {
-      setSavingGuardia(false);
-    }
-  }
 
   // ── Pasar a Noche ──
   const [pasarNocheRef, setPasarNocheRef] = useState<PlanRef | null>(null);
@@ -1280,13 +1241,22 @@ export default function RegistroOTPage() {
                             </button>
                           ) : (
                             <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-end" }}>
-                              <button onClick={() => { setGuardiaRef(ref); setGuardiaNota(""); setGuardiaHH(0); }}
+                              <button
+                                onClick={() => router.push("/ordenes/turnero")}
                                 style={{ ...S.btnPrimary(), padding: "7px 14px", fontSize: 13, background: "#d97706", borderColor: "#d97706" }}>
-                                📋 Registrar turno
+                                📋 Ver bitácora
                               </button>
-                              <span style={{ fontSize: 10, color: "#92400e", fontWeight: 600, textAlign: "right" as const }}>
-                                Cierre al fin de semana
-                              </span>
+                              {cierreSemanaHabilitado ? (
+                                <button
+                                  onClick={() => abrirRegistroPlan(ref)}
+                                  style={{ fontSize: 11, fontWeight: 700, color: "white", background: "#16a34a", border: "none", borderRadius: 6, padding: "5px 12px", cursor: "pointer", whiteSpace: "nowrap" as const }}>
+                                  🔐 Cerrar OT de semana
+                                </button>
+                              ) : (
+                                <span style={{ fontSize: 10, color: "#92400e", fontWeight: 600, textAlign: "right" as const }}>
+                                  Cierre habilitado el domingo
+                                </span>
+                              )}
                             </div>
                           )
                         ) : yaRegistrada ? (
@@ -1360,50 +1330,6 @@ export default function RegistroOTPage() {
                         </div>
                       );
                     })()}
-
-                    {/* ── Modal Bitácora Guardia ── */}
-                    {guardiaRef?.planId === ref.planId && guardiaRef?.ot.numeroOT === ot.numeroOT && (
-                      <div style={{ marginTop: 10, borderTop: "1px solid #fde68a", paddingTop: 10, background: "#fffbeb", borderRadius: "0 0 10px 10px", padding: "12px" }}>
-                        <p style={{ fontSize: 12, fontWeight: 700, color: "#92400e", marginBottom: 8 }}>
-                          📋 ¿Qué atendiste en este turno? ({guardiaRef?.ot.grupo ?? autoTurnoGuardia()} · {new Date().toLocaleDateString("es-BO")})
-                        </p>
-                        <textarea
-                          value={guardiaNota}
-                          onChange={e => setGuardiaNota(e.target.value)}
-                          placeholder="Describe las actividades atendidas: llamadas de operaciones, fallas, ajustes, inspecciones de ruta..."
-                          style={{ width: "100%", border: "1px solid #fcd34d", borderRadius: 6, padding: "8px 10px", fontSize: 12, outline: "none", boxSizing: "border-box" as const, resize: "vertical" as const, minHeight: 70, marginBottom: 8 }}
-                        />
-                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-                          <label style={{ fontSize: 12, fontWeight: 600, color: "#92400e", whiteSpace: "nowrap" as const }}>HH atendidas en el turno:</label>
-                          <input type="number" min={0} max={12} step={0.5}
-                            value={guardiaHH}
-                            onChange={e => setGuardiaHH(Number(e.target.value))}
-                            style={{ width: 70, border: "1px solid #fcd34d", borderRadius: 6, padding: "5px 8px", fontSize: 13, outline: "none" }}
-                          />
-                        </div>
-                        {/* Historial del día */}
-                        {(ot.bitacora?.length ?? 0) > 0 && (
-                          <div style={{ marginBottom: 8, background: "white", borderRadius: 6, border: "1px solid #fde68a", padding: "8px 10px" }}>
-                            <p style={{ fontSize: 11, fontWeight: 700, color: "#92400e", marginBottom: 4 }}>Registros anteriores:</p>
-                            {ot.bitacora!.map((b, bi) => (
-                              <div key={bi} style={{ fontSize: 11, color: "#475569", borderBottom: "1px solid #fef3c7", paddingBottom: 4, marginBottom: 4 }}>
-                                <span style={{ fontWeight: 700 }}>{b.turno}</span> · {b.hhAtendidas}HH · <span style={{ fontStyle: "italic" }}>{b.nota}</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                          <button onClick={() => setGuardiaRef(null)}
-                            style={{ fontSize: 12, padding: "5px 14px", borderRadius: 6, border: "1px solid #e2e8f0", background: "white", cursor: "pointer", color: "#64748b" }}>
-                            Cancelar
-                          </button>
-                          <button onClick={confirmarBitacora} disabled={savingGuardia || !guardiaNota.trim()}
-                            style={{ fontSize: 12, fontWeight: 700, padding: "5px 14px", borderRadius: 6, border: "none", background: savingGuardia || !guardiaNota.trim() ? "#fcd34d" : "#d97706", color: "white", cursor: savingGuardia || !guardiaNota.trim() ? "not-allowed" : "pointer" }}>
-                            {savingGuardia ? "Guardando…" : "✓ Guardar registro"}
-                          </button>
-                        </div>
-                      </div>
-                    )}
 
                     {/* Mini-form Pasar a Noche (inline, solo para esta OT) */}
                     {pasarNocheRef?.planId === ref.planId && pasarNocheRef?.ot.numeroOT === ot.numeroOT && (
