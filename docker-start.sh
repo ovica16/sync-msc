@@ -27,13 +27,13 @@ const migraciones = [
       console.log('[migrate] Skip:', e.message.slice(0, 100));
     }
   }
-  // Inicializar contador de certificados 2026 en 277 (ya se hicieron 277)
-  // ON CONFLICT DO NOTHING: no sobreescribe si ya existe (siguiente cert sería 278)
+  // Forzar contador 2026 a 277 si está por debajo (corrige arranques previos en 1)
   try {
     await pool.query(
-      `INSERT INTO "Contador" (nombre, valor) VALUES ('calibracion-2026', 277) ON CONFLICT (nombre) DO NOTHING`
+      `INSERT INTO "Contador" (nombre, valor) VALUES ('calibracion-2026', 277)
+       ON CONFLICT (nombre) DO UPDATE SET valor = GREATEST("Contador".valor, 277)`
     );
-    console.log('[migrate] Contador calibracion-2026 inicializado.');
+    console.log('[migrate] Contador calibracion-2026 asegurado en >= 277.');
   } catch(e) {
     console.log('[migrate] Contador skip:', e.message.slice(0, 80));
   }
