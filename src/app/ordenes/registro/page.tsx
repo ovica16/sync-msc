@@ -502,17 +502,39 @@ function AdjuntoCard({ adj, onChange, onRemove }: {
   onChange: (updated: AdjuntoItem) => void;
   onRemove: () => void;
 }) {
-  const [inputExtra, setInputExtra] = useState("");
+  const [inputComentario, setInputComentario] = useState("");
 
-  function agregarExtra() {
-    const txt = inputExtra.trim();
+  // Todos los comentarios: comentario principal + extras en una sola lista
+  const todos = adj.comentario.trim()
+    ? [adj.comentario, ...adj.comentariosExtra]
+    : adj.comentariosExtra;
+  const sinComentario = todos.length === 0;
+
+  function agregar() {
+    const txt = inputComentario.trim();
     if (!txt) return;
-    onChange({ ...adj, comentariosExtra: [...adj.comentariosExtra, txt] });
-    setInputExtra("");
+    if (!adj.comentario.trim()) {
+      // El primero se convierte en comentario principal
+      onChange({ ...adj, comentario: txt });
+    } else {
+      onChange({ ...adj, comentariosExtra: [...adj.comentariosExtra, txt] });
+    }
+    setInputComentario("");
+  }
+
+  function eliminarComentario(idx: number) {
+    if (idx === 0 && adj.comentario.trim()) {
+      // Eliminar el comentario principal: promover el primero de extras
+      const [primero, ...resto] = adj.comentariosExtra;
+      onChange({ ...adj, comentario: primero ?? "", comentariosExtra: resto });
+    } else {
+      const extraIdx = idx - (adj.comentario.trim() ? 1 : 0);
+      onChange({ ...adj, comentariosExtra: adj.comentariosExtra.filter((_, j) => j !== extraIdx) });
+    }
   }
 
   return (
-    <div style={{ background: "#f8fafc", border: adj.comentario.trim() ? "1px solid #e2e8f0" : "1px solid #fca5a5", borderRadius: 10, padding: "10px 12px", marginBottom: 8 }}>
+    <div style={{ background: "#f8fafc", border: sinComentario ? "1px solid #fca5a5" : "1px solid #e2e8f0", borderRadius: 10, padding: "10px 12px", marginBottom: 8 }}>
       {/* Fila superior: miniatura + nombre + botón eliminar */}
       <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 8 }}>
         {adj.tipo === "foto" ? (
@@ -534,41 +556,33 @@ function AdjuntoCard({ adj, onChange, onRemove }: {
           style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 6, color: "#dc2626", cursor: "pointer", fontSize: 12, padding: "4px 8px", flexShrink: 0, fontWeight: 700 }}>✕ Eliminar</button>
       </div>
 
-      {/* Comentario principal obligatorio — ancho completo */}
-      <input
-        value={adj.comentario}
-        onChange={e => onChange({ ...adj, comentario: e.target.value })}
-        placeholder={`Comentario sobre ${adj.tipo === "foto" ? "la foto" : "el documento"} (obligatorio)…`}
-        style={{ ...S.input, fontSize: 13, marginBottom: 4, borderColor: adj.comentario.trim() ? "#cbd5e1" : "#fca5a5", background: adj.comentario.trim() ? "white" : "#fff5f5" }}
-      />
-      {!adj.comentario.trim() && (
-        <p style={{ fontSize: 11, color: "#dc2626", marginBottom: 6 }}>⚠ Comentario requerido para confirmar</p>
-      )}
-
-      {/* Comentarios adicionales ya agregados */}
-      {adj.comentariosExtra.length > 0 && (
-        <div style={{ marginBottom: 6, display: "flex", flexDirection: "column" as const, gap: 4 }}>
-          {adj.comentariosExtra.map((c, ci) => (
-            <div key={ci} style={{ display: "flex", alignItems: "flex-start", gap: 6, background: "#eff6ff", borderRadius: 6, padding: "5px 8px", border: "1px solid #bfdbfe" }}>
+      {/* Lista de comentarios ya agregados */}
+      {todos.length > 0 && (
+        <div style={{ marginBottom: 8, display: "flex", flexDirection: "column" as const, gap: 4 }}>
+          {todos.map((c, ci) => (
+            <div key={ci} style={{ display: "flex", alignItems: "flex-start", gap: 6, background: "#eff6ff", borderRadius: 6, padding: "6px 10px", border: "1px solid #bfdbfe" }}>
               <span style={{ flex: 1, fontSize: 12, color: "#1e40af", lineHeight: 1.4 }}>• {c}</span>
-              <button type="button"
-                onClick={() => onChange({ ...adj, comentariosExtra: adj.comentariosExtra.filter((_, j) => j !== ci) })}
+              <button type="button" onClick={() => eliminarComentario(ci)}
                 style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: 13, lineHeight: 1, flexShrink: 0 }}>✕</button>
             </div>
           ))}
         </div>
       )}
 
-      {/* Agregar otro comentario — siempre visible, ancho completo */}
+      {sinComentario && (
+        <p style={{ fontSize: 11, color: "#dc2626", marginBottom: 6 }}>⚠ Agrega al menos un comentario para confirmar</p>
+      )}
+
+      {/* Input + Agregar — único punto de entrada, siempre visible */}
       <div style={{ display: "flex", gap: 6 }}>
         <input
-          value={inputExtra}
-          onChange={e => setInputExtra(e.target.value)}
-          onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); agregarExtra(); } }}
-          placeholder="Agregar otro comentario — Enter para confirmar"
-          style={{ ...S.input, fontSize: 12, flex: 1 }}
+          value={inputComentario}
+          onChange={e => setInputComentario(e.target.value)}
+          onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); agregar(); } }}
+          placeholder={sinComentario ? `Comentario sobre ${adj.tipo === "foto" ? "la foto" : "el documento"}…` : "Agregar otro comentario — Enter para confirmar"}
+          style={{ ...S.input, fontSize: 12, flex: 1, borderColor: sinComentario ? "#fca5a5" : "#cbd5e1", background: sinComentario ? "#fff5f5" : "white" }}
         />
-        <button type="button" onClick={agregarExtra}
+        <button type="button" onClick={agregar}
           style={{ background: "#0891b2", color: "white", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" as const }}>
           + Agregar
         </button>
