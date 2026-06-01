@@ -7,7 +7,7 @@ import { generarInformeOT } from "@/lib/generarInformeOT";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type EstadoOT = "borrador" | "pendiente_revision" | "solicitar_correccion" | "revisado" | "concluido";
+type EstadoOT = "borrador" | "en_proceso" | "pendiente_revision" | "solicitar_correccion" | "revisado" | "concluido";
 
 type InspeccionItem = { descripcion: string; ok: boolean; obs: string };
 type Inspeccion = { checklistId: string; checklistNombre: string; items: InspeccionItem[] };
@@ -79,6 +79,7 @@ type AreaOpt = { codigo: string; nombre: string };
 
 const ESTADO_COLOR: Record<string, string> = {
   borrador: "#64748b",
+  en_proceso: "#7c3aed",
   pendiente_revision: "#d97706",
   solicitar_correccion: "#dc2626",
   revisado: "#2563eb",
@@ -87,6 +88,7 @@ const ESTADO_COLOR: Record<string, string> = {
 
 const ESTADO_LABEL: Record<string, string> = {
   borrador: "Borrador",
+  en_proceso: "En proceso",
   pendiente_revision: "Pend. revisión",
   solicitar_correccion: "Corrección",
   revisado: "Revisado",
@@ -111,6 +113,7 @@ const EMPTY_SUP: SupForm = {
 
 const COLS_TABLERO: { key: EstadoOT; label: string; color: string }[] = [
   { key: "borrador",             label: "Borradores",       color: "#64748b" },
+  { key: "en_proceso",           label: "En proceso",       color: "#7c3aed" },
   { key: "pendiente_revision",   label: "Pend. Revisión",   color: "#d97706" },
   { key: "solicitar_correccion", label: "Corrección",       color: "#dc2626" },
   { key: "revisado",             label: "Revisado",         color: "#2563eb" },
