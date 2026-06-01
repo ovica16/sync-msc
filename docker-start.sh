@@ -9,7 +9,7 @@ const pool = new Pool({
     : false,
 });
 
-// Lista de ALTER TABLE idempotentes — agregar aquí cada nuevo campo
+// Lista de migraciones idempotentes — agregar aquí cada nuevo campo
 const migraciones = [
   "ALTER TABLE \"ReporteTurno\" ADD COLUMN IF NOT EXISTS tipo TEXT NOT NULL DEFAULT 'supervisor'",
   "ALTER TABLE \"OtLinea\" ADD COLUMN IF NOT EXISTS adjuntos JSONB NOT NULL DEFAULT '[]'",
@@ -27,6 +27,17 @@ const migraciones = [
       console.log('[migrate] Skip:', e.message.slice(0, 100));
     }
   }
+  // Inicializar contador de certificados 2026 en 277 (ya se hicieron 277)
+  // ON CONFLICT DO NOTHING: no sobreescribe si ya existe (siguiente cert sería 278)
+  try {
+    await pool.query(
+      `INSERT INTO "Contador" (nombre, valor) VALUES ('calibracion-2026', 277) ON CONFLICT (nombre) DO NOTHING`
+    );
+    console.log('[migrate] Contador calibracion-2026 inicializado.');
+  } catch(e) {
+    console.log('[migrate] Contador skip:', e.message.slice(0, 80));
+  }
+
   await pool.end();
   console.log('[start] Migraciones completadas.');
 })();
