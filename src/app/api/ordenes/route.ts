@@ -180,12 +180,13 @@ export async function POST(req: NextRequest) {
     });
 
     // Actualizar plan semanal si viene del plan
+    // Para OTs recurrentes (misma OT en múltiples días) se vinculan TODOS los días sin filtrar por día
     if (esDePlan && body.programacionSemanalId && body.otJdeNumero) {
       await prisma.otProgramada.updateMany({
         where: {
           programacionSemanalId: body.programacionSemanalId,
           numeroOT: body.otJdeNumero,
-          ...(body.otJdeDia ? { dia: body.otJdeDia } : {}),
+          ...(!body.esRecurrente && body.otJdeDia ? { dia: body.otJdeDia } : {}),
         },
         data: {
           estado: "en_proceso",
