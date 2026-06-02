@@ -60,8 +60,8 @@ export const esTecnico = (rol?: number) => rol === 4;
 export const esPlanificador = (rol?: number) => rol === 5;
 // Planificador (5) tiene mismo nivel de acceso operativo que Supervisor (3)
 export const puedeRevisar = (rol?: number) => rol !== undefined && (rol <= 3 || rol === 5);
-// Puede ver módulo de programación semanal: Admin, Super, Supervisor, Planificador
-export const puedeVerSemanales = (rol?: number) => rol !== undefined && (rol <= 3 || rol === 5);
+// Puede ver módulo de programación semanal: todos los roles
+export const puedeVerSemanales = (rol?: number) => rol !== undefined && rol >= 1;
 export const rolNombre = (rol?: number) => {
   const nombres: Record<number, string> = { 1: "Administrador", 2: "Superintendente", 3: "Supervisor", 4: "Técnico", 5: "Planificador" };
   return rol !== undefined ? (nombres[rol] ?? "—") : "—";

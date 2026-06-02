@@ -96,7 +96,7 @@ const TODOS_MODULOS: Modulo[] = [
     label: "OTs Semanales por Área",
     descripcion: "Programación y dashboard semanal",
     color: "#0f2847",
-    soloSup: true,
+    soloSup: false,
     icon: (
       <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
