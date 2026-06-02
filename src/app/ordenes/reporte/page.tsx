@@ -196,7 +196,7 @@ export default function ReporteOTPage() {
   const { user } = useUser();
 
   // Derivados de rol — Admin(1) y Superintendente(2) tienen acceso total
-  const esTecnico   = user?.rol === 4;
+  const esTecnico   = user?.rol === 4 || user?.rol === 6; // rol 6 = Contratista, mismos permisos que técnico
   const esSup       = user ? user.rol <= 3 : false; // 1, 2, 3 pueden revisar
   const esAdmin     = user?.rol === 1;
 
@@ -269,10 +269,12 @@ export default function ReporteOTPage() {
   const ordenesFiltradas = ordenes.filter((o) => {
     // Técnico solo ve sus propias OTs
     if (esTecnico && user) {
-      const esAsignado = o.tecnicos.some(t =>
-        (t.usuarioId && t.usuarioId === user.id) ||
-        t.nombreCompleto.toLowerCase().includes(user.nombre.toLowerCase().split(" ")[0])
-      );
+      const tokensUser = user.nombre.toLowerCase().normalize("NFD").replace(/\p{Mn}/gu, "").split(/\s+/).filter(t => t.length > 2);
+      const esAsignado = o.tecnicos.some(t => {
+        if (t.usuarioId && t.usuarioId === user.id) return true;
+        const nombreNorm = t.nombreCompleto.toLowerCase().normalize("NFD").replace(/\p{Mn}/gu, "");
+        return tokensUser.some(tok => nombreNorm.includes(tok));
+      });
       if (!esAsignado) return false;
     }
     if (!filtroBuscar) return true;
@@ -685,10 +687,12 @@ export default function ReporteOTPage() {
   const enEstadoTecnico = ot.estado === "borrador" || ot.estado === "solicitar_correccion";
 
   // Técnico solo puede editar OTs donde él está asignado (por id o por nombre)
-  const esOtPropia = esTecnico && ot.tecnicos.some(t =>
-    (t.usuarioId && user?.id && t.usuarioId === user.id) ||
-    (user?.nombre && t.nombreCompleto.toLowerCase().includes(user.nombre.toLowerCase().split(" ")[0]))
-  );
+  const tokensNombre = (user?.nombre ?? "").toLowerCase().normalize("NFD").replace(/\p{Mn}/gu, "").split(/\s+/).filter(t => t.length > 2);
+  const esOtPropia = esTecnico && ot.tecnicos.some(t => {
+    if (t.usuarioId && user?.id && t.usuarioId === user.id) return true;
+    const nombreNorm = t.nombreCompleto.toLowerCase().normalize("NFD").replace(/\p{Mn}/gu, "");
+    return tokensNombre.some(tok => nombreNorm.includes(tok));
+  });
 
   const canEdit = !isConcluido && (esAdmin || (esTecnico && enEstadoTecnico && esOtPropia) || (esSup && !esTecnico));
 
