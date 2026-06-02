@@ -1078,6 +1078,7 @@ function UsuariosTab() {
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
   const [areas, setAreas] = useState<AreaOption[]>([]);
+  const formRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1100,6 +1101,7 @@ function UsuariosTab() {
     });
     setErr("");
     setShowForm(true);
+    setTimeout(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
   }
 
   function openEdit(item: UsuarioItem) {
@@ -1121,6 +1123,7 @@ function UsuariosTab() {
     });
     setErr("");
     setShowForm(true);
+    setTimeout(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
   }
 
   async function save() {
@@ -1221,7 +1224,7 @@ function UsuariosTab() {
       </div>
 
       {showForm && (
-        <div style={C.formBox}>
+        <div ref={formRef} style={C.formBox}>
           <h3 style={{ margin: "0 0 16px", fontSize: 14, fontWeight: 700, color: "#0f2847" }}>
             {editItem ? "Editar Usuario" : "Nuevo Usuario"}
           </h3>
