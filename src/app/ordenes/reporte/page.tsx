@@ -267,6 +267,14 @@ export default function ReporteOTPage() {
   }, [selected?._id]);
 
   const ordenesFiltradas = ordenes.filter((o) => {
+    // Técnico solo ve sus propias OTs
+    if (esTecnico && user) {
+      const esAsignado = o.tecnicos.some(t =>
+        (t.usuarioId && t.usuarioId === user.id) ||
+        t.nombreCompleto.toLowerCase().includes(user.nombre.toLowerCase().split(" ")[0])
+      );
+      if (!esAsignado) return false;
+    }
     if (!filtroBuscar) return true;
     const q = filtroBuscar.toLowerCase();
     return (
@@ -675,10 +683,17 @@ export default function ReporteOTPage() {
 
   // Técnico edita en borrador/corrección; supervisor/admin en cualquier estado activo
   const enEstadoTecnico = ot.estado === "borrador" || ot.estado === "solicitar_correccion";
-  const canEdit = !isConcluido && (esAdmin || (esTecnico && enEstadoTecnico) || (esSup && !esTecnico));
+
+  // Técnico solo puede editar OTs donde él está asignado (por id o por nombre)
+  const esOtPropia = esTecnico && ot.tecnicos.some(t =>
+    (t.usuarioId && user?.id && t.usuarioId === user.id) ||
+    (user?.nombre && t.nombreCompleto.toLowerCase().includes(user.nombre.toLowerCase().split(" ")[0]))
+  );
+
+  const canEdit = !isConcluido && (esAdmin || (esTecnico && enEstadoTecnico && esOtPropia) || (esSup && !esTecnico));
 
   // Solo técnico (o admin) puede enviar a revisión desde borrador/corrección
-  const canSendToReview = enEstadoTecnico && (esTecnico || esAdmin);
+  const canSendToReview = enEstadoTecnico && (esAdmin || (esTecnico && esOtPropia));
 
   // Formulario de supervisión: solo supervisores/admins, cuando la OT está en pendiente_revision
   const showSupForm = esSup && ot.estado === "pendiente_revision";
