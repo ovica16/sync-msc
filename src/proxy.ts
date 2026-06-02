@@ -9,6 +9,7 @@ const PUBLIC_PATHS = [
   "/api/auth/login",
   "/api/auth/logout",
   "/api/health",
+  "/api/calibracion/renumerar",
 ];
 
 export async function proxy(req: NextRequest) {
