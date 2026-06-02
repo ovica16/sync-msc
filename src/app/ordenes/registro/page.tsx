@@ -141,14 +141,18 @@ const DIA_MAP: DiaSem[] = ["Do", "Lu", "Ma", "Mi", "Ju", "Vi", "Sa"];
 // "James Quispe" vs "Quispe Valda José Calasanz" → 1 token común → false ✓
 // "José Quispe"  vs "Quispe Valda José Calasanz" → 2 tokens comunes → true ✓
 function normalizar(s: string): string {
-  return s.toLowerCase().normalize("NFD").replace(/\p{Mn}/gu, "");
+  return s.trim().toLowerCase().normalize("NFD").replace(/\p{Mn}/gu, "").replace(/\s+/g, " ");
 }
 function nombreCoincide(planNombre: string, userNombre: string): boolean {
-  const tokA = new Set(normalizar(planNombre).split(/\s+/).filter(t => t.length > 2));
-  const tokB = new Set(normalizar(userNombre).split(/\s+/).filter(t => t.length > 2));
-  // Todos los tokens del nombre más corto deben aparecer en el más largo.
-  // Ej: "Cordova Felix" ⊂ "Cordova Ramos Felix" → coincide ✓
-  //     "James Quispe" vs "Quispe Valda José" → "james" no está → no coincide ✓
+  const normA = normalizar(planNombre);
+  const normB = normalizar(userNombre);
+  // Coincidencia exacta o una cadena contiene a la otra (nombres completos)
+  if (normA === normB || normA.includes(normB) || normB.includes(normA)) return true;
+  // Subset de tokens: todos los del nombre más corto en el más largo
+  // "Cordova Felix" ⊂ "Cordova Ramos Felix" → true ✓
+  // "James Quispe" vs "Quispe Valda José" → "james" no está → false ✓
+  const tokA = new Set(normA.split(" ").filter(t => t.length > 2));
+  const tokB = new Set(normB.split(" ").filter(t => t.length > 2));
   const [menor, mayor] = tokA.size <= tokB.size ? [tokA, tokB] : [tokB, tokA];
   if (menor.size === 0) return false;
   for (const t of menor) { if (!mayor.has(t)) return false; }

@@ -397,6 +397,15 @@ export default function ReporteTurnoTecnicoPage() {
                       <button onClick={() => setDetalle(r)} style={S.btnGhost}>Ver</button>
                       <button onClick={() => window.open(`/ordenes/turno-tecnico/${r._id}/imprimir`, "_blank")}
                         style={{ ...S.btnGreen, padding: "8px 14px", fontSize: 13 }}>🖨 PDF</button>
+                      {user && user.rol === 1 && (
+                        <button onClick={async () => {
+                          if (!confirm("¿Eliminar este reporte? Esta acción no se puede deshacer.")) return;
+                          await fetch(`/api/reportes-turno/${r._id}`, { method: "DELETE" });
+                          setReportes(prev => prev.filter(x => x._id !== r._id));
+                        }} style={{ padding: "8px 12px", background: "#fee2e2", color: "#dc2626", border: "1px solid #fca5a5", borderRadius: 6, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
+                          Eliminar
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
