@@ -509,7 +509,7 @@ export default function ReporteOTPage() {
                           {ot.lineas.map((l, i) => <span key={i} style={S.badge(TIPO_COLOR[l.tipoOT] ?? "#64748b")}>{l.tipoOT}</span>)}
                         </div>
                         <p style={{ fontSize: 12, color: "#64748b", marginBottom: 2 }}>
-                          {new Date(ot.fecha).toLocaleDateString("es-BO")} · {ot.turno} · {areaNombre(ot.areaCodigo)}
+                          {new Date(ot.fecha).toLocaleDateString("es-BO", { timeZone: "UTC" })} · {ot.turno} · {areaNombre(ot.areaCodigo)}
                         </p>
                         <p style={{ fontSize: 12, color: "#475569" }}>{ot.tecnicos.map((t) => t.nombreCompleto).join(", ")}</p>
                         <p style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>{ot.lineas.map((l) => l.tag).join(" · ")}</p>
@@ -570,7 +570,7 @@ export default function ReporteOTPage() {
                         >
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
                             <span style={{ fontWeight: 800, fontSize: 13, color: "#0f2847" }}>{ot.otJdeNumero ? `OT ${ot.otJdeNumero}` : `#${ot.numeroOT}`}</span>
-                            <span style={{ fontSize: 10, color: "#94a3b8" }}>{new Date(ot.fecha).toLocaleDateString("es-BO", { day: "2-digit", month: "2-digit" })}</span>
+                            <span style={{ fontSize: 10, color: "#94a3b8" }}>{new Date(ot.fecha).toLocaleDateString("es-BO", { day: "2-digit", month: "2-digit", timeZone: "UTC" })}</span>
                           </div>
                           {/* Badge origen: plan vs reactiva */}
                           <div style={{ display: "flex", gap: 4, marginBottom: 4, flexWrap: "wrap" }}>
@@ -716,7 +716,7 @@ export default function ReporteOTPage() {
               )}
               {editMode && <span style={{ ...S.badge("#f59e0b"), fontSize: 11 }}>✏ Modo edición</span>}
             </div>
-            <p style={{ fontSize: 12, color: "#94a3b8" }}>{new Date(ot.fecha).toLocaleDateString("es-BO")} · {ot.turno}</p>
+            <p style={{ fontSize: 12, color: "#94a3b8" }}>{new Date(ot.fecha).toLocaleDateString("es-BO", { timeZone: "UTC" })} · {ot.turno}</p>
           </div>
           {canEdit && !editMode && (
             <button onClick={enterEditMode} style={{ ...S.btnAmber, padding: "8px 16px", fontSize: 13 }}>
@@ -1276,7 +1276,7 @@ export default function ReporteOTPage() {
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
                       <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                         <span style={{ fontWeight: 800, fontSize: 13, color: "#0f2847" }}>
-                          {new Date(r.fecha).toLocaleDateString("es-BO", { weekday: "short", day: "2-digit", month: "short" })}
+                          {new Date(r.fecha).toLocaleDateString("es-BO", { weekday: "short", day: "2-digit", month: "short", timeZone: "UTC" })}
                         </span>
                         <span style={{ fontSize: 11, fontWeight: 700, background: "#dbeafe", color: "#1d4ed8", borderRadius: 4, padding: "2px 8px" }}>{r.hhTrabajadas}HH</span>
                       </div>

@@ -137,11 +137,19 @@ type AvanceDiarioForm = {
 const DIA_MAP: DiaSem[] = ["Do", "Lu", "Ma", "Mi", "Ju", "Vi", "Sa"];
 
 // Compara nombre del plan vs nombre de sesión tolerando orden de palabras diferente.
-// Ej: "Erwin Huayllas" vs "Huayllas Esquivel Erwin" → match porque comparten tokens.
+// Compara nombres normalizando acentos y requiriendo ≥2 tokens en común.
+// "James Quispe" vs "Quispe Valda José Calasanz" → 1 token común → false ✓
+// "José Quispe"  vs "Quispe Valda José Calasanz" → 2 tokens comunes → true ✓
+function normalizar(s: string): string {
+  return s.toLowerCase().normalize("NFD").replace(/\p{Mn}/gu, "");
+}
 function nombreCoincide(planNombre: string, userNombre: string): boolean {
-  const tokens = planNombre.toLowerCase().split(/\s+/).filter(t => t.length > 2);
-  const haystack = userNombre.toLowerCase();
-  return tokens.length > 0 && tokens.some(t => haystack.includes(t));
+  const tokA = new Set(normalizar(planNombre).split(/\s+/).filter(t => t.length > 2));
+  const tokB = new Set(normalizar(userNombre).split(/\s+/).filter(t => t.length > 2));
+  let comunes = 0;
+  for (const t of tokA) { if (tokB.has(t)) comunes++; }
+  // Si el nombre del plan tiene solo 1 token basta 1 coincidencia; si tiene ≥2, se exigen ≥2
+  return tokA.size === 1 ? comunes >= 1 : comunes >= 2;
 }
 
 function getWeekNumber(d: Date) {
@@ -152,21 +160,45 @@ function getWeekNumber(d: Date) {
   return Math.ceil((((dt.getTime() - y.getTime()) / 86400000) + 1) / 7);
 }
 
+// Devuelve las 7 fechas (Lun-Dom) de la semana ISO dada
+function getWeekDates(semana: number, anio: number): Date[] {
+  // Encontrar el 4 de enero (siempre en la semana 1)
+  const jan4 = new Date(anio, 0, 4);
+  // Lunes de la semana 1
+  const lunes1 = new Date(jan4);
+  lunes1.setDate(jan4.getDate() - ((jan4.getDay() + 6) % 7));
+  // Lunes de la semana deseada
+  const lunesSemana = new Date(lunes1);
+  lunesSemana.setDate(lunes1.getDate() + (semana - 1) * 7);
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(lunesSemana);
+    d.setDate(lunesSemana.getDate() + i);
+    return d;
+  });
+}
+
 // Turnos: Diurno 06:30–18:29 · Nocturno 18:30–06:29 (cruza medianoche)
 // Si son las 00:00–06:29, el turno nocturno pertenece al día ANTERIOR
+function localDateStr(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 function getFechaTurno(): { fecha: string; turno: TurnoTipo } {
   const ahora = new Date();
   const min = ahora.getHours() * 60 + ahora.getMinutes();
   const INICIO_DIA   = 6 * 60 + 30;   // 06:30
   const INICIO_NOCHE = 18 * 60 + 30;  // 18:30
   if (min >= INICIO_NOCHE) {
-    return { fecha: ahora.toISOString().split("T")[0], turno: "Nocturno" };
+    return { fecha: localDateStr(ahora), turno: "Nocturno" };
   } else if (min < INICIO_DIA) {
     const ayer = new Date(ahora);
     ayer.setDate(ayer.getDate() - 1);
-    return { fecha: ayer.toISOString().split("T")[0], turno: "Nocturno" };
+    return { fecha: localDateStr(ayer), turno: "Nocturno" };
   }
-  return { fecha: ahora.toISOString().split("T")[0], turno: "Diurno" };
+  return { fecha: localDateStr(ahora), turno: "Diurno" };
 }
 
 function autoTurno(): TurnoTipo { return getFechaTurno().turno; }
@@ -1072,7 +1104,7 @@ export default function RegistroOTPage() {
   const { fecha: shiftFecha, turno: shiftTurno } = getFechaTurno();
   // today = fecha calendario real (para semana/día display)
   // shiftFecha = fecha del turno activo (puede ser ayer si son las 00:00-06:29)
-  const today = now.toISOString().split("T")[0];
+  const today = localDateStr(now);
   const todayDia = DIA_MAP[now.getDay()];
   const currentSemana = getWeekNumber(now);
   const currentAnio = now.getFullYear();
@@ -1472,31 +1504,40 @@ export default function RegistroOTPage() {
               </div>
 
               {/* Pestañas de días */}
-              {!loadingPlan && (
-                <div style={{ display: "flex", borderTop: "1px solid #e0eeff", borderBottom: "1px solid #e0eeff", overflowX: "auto", background: "white" }}>
-                  {(["Lu","Ma","Mi","Ju","Vi","Sa","Do"] as DiaSem[]).map(dia => {
-                    const count = planRefs.filter(r => r.ot.dia === dia).length;
-                    const isHoy = dia === todayDia;
-                    const isActive = dia === diaSeleccionado;
-                    return (
-                      <button key={dia} onClick={() => setDiaSeleccionado(dia)} style={{
-                        flex: 1, minWidth: 48, padding: "8px 6px", border: "none",
-                        borderBottom: isActive ? "3px solid #2563eb" : "3px solid transparent",
-                        background: isActive ? "#eff6ff" : "transparent",
-                        cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
-                      }}>
-                        <span style={{ fontSize: 11, fontWeight: 800, color: isActive ? "#2563eb" : isHoy ? "#0f2847" : "#94a3b8", letterSpacing: "0.04em" }}>
-                          {dia}{isHoy ? " ●" : ""}
-                        </span>
-                        {count > 0
-                          ? <span style={{ fontSize: 11, fontWeight: 700, color: isActive ? "#2563eb" : "#64748b" }}>{count}</span>
-                          : <span style={{ fontSize: 11, color: "#cbd5e1" }}>—</span>
-                        }
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
+              {!loadingPlan && (() => {
+                const weekDates = getWeekDates(currentSemana, currentAnio);
+                // Lu=0 Ma=1 Mi=2 Ju=3 Vi=4 Sa=5 Do=6 en el array weekDates
+                const DIA_IDX: Record<DiaSem, number> = { Lu: 0, Ma: 1, Mi: 2, Ju: 3, Vi: 4, Sa: 5, Do: 6 };
+                return (
+                  <div style={{ display: "flex", borderTop: "1px solid #e0eeff", borderBottom: "1px solid #e0eeff", overflowX: "auto", background: "white" }}>
+                    {(["Lu","Ma","Mi","Ju","Vi","Sa","Do"] as DiaSem[]).map(dia => {
+                      const count = planRefs.filter(r => r.ot.dia === dia).length;
+                      const isHoy = dia === todayDia;
+                      const isActive = dia === diaSeleccionado;
+                      const diaFecha = weekDates[DIA_IDX[dia]];
+                      return (
+                        <button key={dia} onClick={() => setDiaSeleccionado(dia)} style={{
+                          flex: 1, minWidth: 48, padding: "8px 6px", border: "none",
+                          borderBottom: isActive ? "3px solid #2563eb" : "3px solid transparent",
+                          background: isActive ? "#eff6ff" : "transparent",
+                          cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
+                        }}>
+                          <span style={{ fontSize: 11, fontWeight: 800, color: isActive ? "#2563eb" : isHoy ? "#0f2847" : "#94a3b8", letterSpacing: "0.04em" }}>
+                            {dia}{isHoy ? " ●" : ""}
+                          </span>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: isActive ? "#2563eb" : isHoy ? "#0f2847" : "#64748b" }}>
+                            {diaFecha.getDate()}
+                          </span>
+                          {count > 0
+                            ? <span style={{ fontSize: 10, color: isActive ? "#60a5fa" : "#94a3b8" }}>{count} OT</span>
+                            : <span style={{ fontSize: 10, color: "#e2e8f0" }}>—</span>
+                          }
+                        </button>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
 
               {/* Lista de OTs del día seleccionado */}
               <div style={{ padding: "10px 12px" }}>

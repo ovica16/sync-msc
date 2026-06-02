@@ -37,6 +37,8 @@ export async function GET(req: NextRequest) {
       puesto: u.puesto ?? "",
       superintendencia: u.superintendencia ?? "",
       activo: u.activo,
+      esContratista: u.esContratista,
+      fechaExpiracion: u.fechaExpiracion ?? null,
     }))
   );
 }
@@ -45,7 +47,8 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { nombre, apellido, email, password, rol, areas, areaTrabajo,
-            celular, jde, puesto, superintendencia, disciplina } = body;
+            celular, jde, puesto, superintendencia, disciplina,
+            esContratista, fechaExpiracion } = body;
 
     let passwordHash: string | undefined;
     if (password?.trim()) {
@@ -67,6 +70,8 @@ export async function POST(req: NextRequest) {
         puesto: puesto?.trim() || null,
         superintendencia: superintendencia?.trim() || null,
         activo: body.activo !== undefined ? body.activo : true,
+        esContratista: esContratista === true,
+        fechaExpiracion: fechaExpiracion ? new Date(fechaExpiracion) : null,
         areas: {
           create: (areas ?? []).map((codigo: string) => ({ areaCodigo: codigo })),
         },
