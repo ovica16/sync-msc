@@ -39,7 +39,8 @@ export async function PUT(req: NextRequest, { params }: Ctx) {
     const { id } = await params;
     const body = await req.json();
     const { numeroOT, dia, estado, observaciones,
-            pasarNoche, pasarNocheMotivo, pasarNocheNota, pasarNochePor } = body;
+            pasarNoche, pasarNocheMotivo, pasarNocheNota, pasarNochePor,
+            personalAsignado } = body;
 
     if (!numeroOT || !dia)
       return Response.json({ ok: false, error: "numeroOT y dia son requeridos" }, { status: 400 });
@@ -47,9 +48,10 @@ export async function PUT(req: NextRequest, { params }: Ctx) {
     await prisma.otProgramada.updateMany({
       where: { programacionSemanalId: id, numeroOT, dia },
       data: {
-        ...(estado       !== undefined ? { estado } : {}),
-        ...(observaciones !== undefined ? { observaciones } : {}),
-        ...(pasarNoche   !== undefined ? {
+        ...(estado             !== undefined ? { estado } : {}),
+        ...(observaciones      !== undefined ? { observaciones } : {}),
+        ...(personalAsignado   !== undefined ? { personalAsignado } : {}),
+        ...(pasarNoche         !== undefined ? {
           pasarNoche,
           pasarNocheMotivo: pasarNocheMotivo ?? "",
           pasarNocheNota:   pasarNocheNota   ?? "",

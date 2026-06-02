@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import AppHeader from "@/components/AppHeader";
 import { useUser, puedeVerSemanales } from "@/context/AuthContext";
@@ -315,6 +315,153 @@ function Metric({ color, value, label }: { color: string; value: number; label: 
   );
 }
 
+// ─── Modal: Asignar Técnicos ──────────────────────────────────────────────────
+function AsignarTecnicosModal({
+  ot, areaCodigo, programaId, onSave, onClose,
+}: {
+  ot: IOTProgramada;
+  areaCodigo: string;
+  programaId: string;
+  onSave: (updated: IOTProgramada) => void;
+  onClose: () => void;
+}) {
+  const [tecnicos, setTecnicos] = useState<{ _id: string; nombre: string }[]>([]);
+  const [seleccionados, setSeleccionados] = useState<string[]>(ot.personalAsignado ?? []);
+  const [busqueda, setBusqueda] = useState("");
+  const [saving, setSaving] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    fetch(`/api/usuarios?all=true&area=${areaCodigo}`)
+      .then(r => r.json())
+      .then((data: { _id: string; nombre: string }[]) => setTecnicos(data))
+      .catch(() => {});
+    setTimeout(() => inputRef.current?.focus(), 50);
+  }, [areaCodigo]);
+
+  const filtrados = tecnicos.filter(t =>
+    t.nombre.toLowerCase().includes(busqueda.toLowerCase())
+  );
+
+  function toggle(nombre: string) {
+    setSeleccionados(prev =>
+      prev.includes(nombre) ? prev.filter(n => n !== nombre) : [...prev, nombre]
+    );
+  }
+
+  async function guardar() {
+    setSaving(true);
+    const res = await fetch(`/api/programacion-semanal/${programaId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ numeroOT: ot.numeroOT, dia: ot.dia, personalAsignado: seleccionados }),
+    });
+    const data = await res.json();
+    setSaving(false);
+    if (data.ok) {
+      const otActualizada = data.programa.otsProgramadas?.find(
+        (o: IOTProgramada) => o.numeroOT === ot.numeroOT && o.dia === ot.dia
+      );
+      onSave(otActualizada ?? { ...ot, personalAsignado: seleccionados });
+    }
+    onClose();
+  }
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, background: "rgba(15,40,71,0.5)",
+      display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999, padding: 16,
+    }} onClick={onClose}>
+      <div style={{
+        background: "white", borderRadius: 14, padding: 24, width: "100%", maxWidth: 420,
+        boxShadow: "0 8px 32px rgba(15,40,71,0.18)",
+      }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+          <div>
+            <p style={{ margin: 0, fontWeight: 800, fontSize: 15, color: "#0f2847" }}>
+              Asignar técnicos
+            </p>
+            <p style={{ margin: "2px 0 0", fontSize: 12, color: "#64748b" }}>
+              OT {ot.numeroOT} · {ot.dia} · {ot.personas}p requeridas
+            </p>
+          </div>
+          <button onClick={onClose} style={{ background: "none", border: "1px solid #e2e8f0", borderRadius: 6, width: 30, height: 30, cursor: "pointer", fontSize: 14, color: "#64748b" }}>✕</button>
+        </div>
+
+        <input
+          ref={inputRef}
+          placeholder="Buscar técnico..."
+          value={busqueda}
+          onChange={e => setBusqueda(e.target.value)}
+          style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "1.5px solid #e2e8f0", fontSize: 13, boxSizing: "border-box" as const, marginBottom: 10 }}
+        />
+
+        {/* Seleccionados */}
+        {seleccionados.length > 0 && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+            {seleccionados.map(n => (
+              <span key={n} style={{
+                display: "inline-flex", alignItems: "center", gap: 5,
+                background: "#dbeafe", color: "#1d4ed8", borderRadius: 20,
+                padding: "3px 10px", fontSize: 12, fontWeight: 600,
+              }}>
+                👤 {n}
+                <button onClick={() => toggle(n)} style={{ background: "none", border: "none", cursor: "pointer", color: "#1d4ed8", fontSize: 13, lineHeight: 1, padding: 0 }}>×</button>
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Lista */}
+        <div style={{ maxHeight: 220, overflowY: "auto", border: "1px solid #e2e8f0", borderRadius: 8 }}>
+          {filtrados.length === 0 && (
+            <p style={{ textAlign: "center", color: "#94a3b8", fontSize: 13, padding: 16 }}>
+              {tecnicos.length === 0 ? "Cargando técnicos..." : "Sin resultados"}
+            </p>
+          )}
+          {filtrados.map(t => {
+            const sel = seleccionados.includes(t.nombre);
+            return (
+              <button key={t._id} onClick={() => toggle(t.nombre)} style={{
+                width: "100%", textAlign: "left", padding: "10px 14px",
+                border: "none", borderBottom: "1px solid #f8fafc",
+                background: sel ? "#eff6ff" : "white", cursor: "pointer",
+                display: "flex", alignItems: "center", gap: 10,
+              }}>
+                <span style={{
+                  width: 18, height: 18, borderRadius: 4, border: `2px solid ${sel ? "#2563eb" : "#cbd5e1"}`,
+                  background: sel ? "#2563eb" : "white", display: "flex", alignItems: "center", justifyContent: "center",
+                  flexShrink: 0,
+                }}>
+                  {sel && <span style={{ color: "white", fontSize: 11, fontWeight: 800 }}>✓</span>}
+                </span>
+                <span style={{ fontSize: 13, fontWeight: sel ? 700 : 400, color: sel ? "#1d4ed8" : "#1e293b" }}>
+                  {t.nombre}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
+          <button onClick={guardar} disabled={saving} style={{
+            flex: 1, padding: "9px 0", borderRadius: 8, border: "none",
+            background: "#0f2847", color: "white", fontWeight: 700, fontSize: 13, cursor: "pointer",
+          }}>
+            {saving ? "Guardando..." : `Guardar (${seleccionados.length} técnico${seleccionados.length !== 1 ? "s" : ""})`}
+          </button>
+          <button onClick={onClose} style={{
+            padding: "9px 16px", borderRadius: 8, border: "1px solid #e2e8f0",
+            background: "white", color: "#475569", fontSize: 13, cursor: "pointer",
+          }}>
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Vista Tabla ──────────────────────────────────────────────────────────────
 const GRUPO_COLOR: Record<string, { bg: string; color: string }> = {
   G1:      { bg: "#dbeafe", color: "#1d4ed8" },
@@ -327,7 +474,7 @@ const GRUPO_COLOR: Record<string, { bg: string; color: string }> = {
 
 function VistaTabla({
   ots, diaActivo, setDiaActivo, fechasDias, programa,
-  filtros, programaId, onEstadoChange,
+  filtros, programaId, onEstadoChange, isAdmin, areaCodigo, onPersonalChange,
 }: {
   ots: IOTProgramada[];
   diaActivo: DiaSemana;
@@ -337,7 +484,11 @@ function VistaTabla({
   filtros: { tecnico: string; estado: string; turno: string; busqueda: string };
   programaId: string;
   onEstadoChange: (id: string, nOT: string, dia: DiaSemana, estado: EstadoOTProgramada) => void;
+  isAdmin?: boolean;
+  areaCodigo?: string;
+  onPersonalChange?: (updated: IOTProgramada) => void;
 }) {
+  const [asignandoOT, setAsignandoOT] = useState<IOTProgramada | null>(null);
   const allOts = programa.otsProgramadas ?? [];
 
   function otsDia(dia: DiaSemana) {
@@ -467,14 +618,41 @@ function VistaTabla({
                           <span style={{ ...gc, padding: "3px 9px", borderRadius: 4, fontSize: 11, fontWeight: 700 }}>{grupo}</span>
                         </td>
                         <td style={{ padding: "10px 14px", maxWidth: 200 }}>
-                          {ot.personalAsignado?.length > 0 ? (
-                            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                              {ot.personalAsignado.map((p, j) => (
-                                <span key={j} style={{ fontSize: 12, color: "#1e293b" }}>👤 {p}</span>
-                              ))}
-                            </div>
+                          {isAdmin ? (
+                            <button
+                              onClick={() => setAsignandoOT(ot)}
+                              title="Clic para asignar técnicos"
+                              style={{
+                                background: "none", border: "none", cursor: "pointer",
+                                textAlign: "left", padding: 0, width: "100%",
+                              }}
+                            >
+                              {ot.personalAsignado?.length > 0 ? (
+                                <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                                  {ot.personalAsignado.map((p, j) => (
+                                    <span key={j} style={{ fontSize: 12, color: "#1e293b" }}>👤 {p}</span>
+                                  ))}
+                                  <span style={{ fontSize: 10, color: "#94a3b8", marginTop: 1 }}>✏ editar</span>
+                                </div>
+                              ) : (
+                                <span style={{
+                                  fontSize: 12, color: "#ef4444", fontStyle: "italic",
+                                  display: "flex", alignItems: "center", gap: 4,
+                                }}>
+                                  Sin asignar <span style={{ fontSize: 11 }}>✏</span>
+                                </span>
+                              )}
+                            </button>
                           ) : (
-                            <span style={{ fontSize: 12, color: "#ef4444", fontStyle: "italic" }}>Sin asignar</span>
+                            ot.personalAsignado?.length > 0 ? (
+                              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                                {ot.personalAsignado.map((p, j) => (
+                                  <span key={j} style={{ fontSize: 12, color: "#1e293b" }}>👤 {p}</span>
+                                ))}
+                              </div>
+                            ) : (
+                              <span style={{ fontSize: 12, color: "#ef4444", fontStyle: "italic" }}>Sin asignar</span>
+                            )
                           )}
                         </td>
                         <td style={{ padding: "10px 14px", whiteSpace: "nowrap", fontSize: 12, color: "#475569" }}>
@@ -488,6 +666,20 @@ function VistaTabla({
             </tbody>
           </table>
         </div>
+      )}
+
+      {/* Modal asignación de técnicos (solo Admin) */}
+      {asignandoOT && isAdmin && areaCodigo && (
+        <AsignarTecnicosModal
+          ot={asignandoOT}
+          areaCodigo={areaCodigo}
+          programaId={programaId}
+          onSave={(updated) => {
+            onPersonalChange?.(updated);
+            setAsignandoOT(null);
+          }}
+          onClose={() => setAsignandoOT(null)}
+        />
       )}
     </div>
   );
@@ -928,6 +1120,16 @@ export default function SemanalesPage() {
     if (data.ok) setPrograma(data.programa);
   }
 
+  function handlePersonalChange(updated: IOTProgramada) {
+    if (!programa) return;
+    setPrograma({
+      ...programa,
+      otsProgramadas: (programa.otsProgramadas ?? []).map(o =>
+        o.numeroOT === updated.numeroOT && o.dia === updated.dia ? updated : o
+      ),
+    });
+  }
+
   // OTs filtradas
   const otsFiltradas = useMemo(() => {
     if (!programa) return [];
@@ -1162,6 +1364,9 @@ export default function SemanalesPage() {
                 fechasDias={fechasDias} programa={programa}
                 filtros={{ tecnico: filtroTecnico, estado: filtroEstado, turno: filtroTurno, busqueda }}
                 programaId={programaId} onEstadoChange={handleEstadoChange}
+                isAdmin={user?.rol === 1}
+                areaCodigo={areaActiva?.codigo}
+                onPersonalChange={handlePersonalChange}
               />
             )}
             {vista === "kanban" && (
