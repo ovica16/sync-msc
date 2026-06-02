@@ -168,16 +168,25 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
       include,
     });
 
-    // Propagar al plan semanal
-    if (estado && ot.origenPlan && ot.programacionSemanalId && ot.otJdeNumero) {
+    // Propagar al plan semanal — dos vías para cubrir casos con campos de vinculación incompletos
+    if (estado) {
+      const estadoPlan = mapEstadoAlPlan(estado);
+      // Vía 1: por ordenTrabajoId (siempre disponible si la OtProgramada fue vinculada)
       await prisma.otProgramada.updateMany({
-        where: {
-          programacionSemanalId: ot.programacionSemanalId,
-          numeroOT: ot.otJdeNumero,
-          ...(ot.otJdeDia ? { dia: ot.otJdeDia } : {}),
-        },
-        data: { estado: mapEstadoAlPlan(estado) },
+        where: { ordenTrabajoId: ot.id },
+        data: { estado: estadoPlan },
       });
+      // Vía 2: por programacionSemanalId + numeroOT (para OTs recurrentes multi-día)
+      if (ot.origenPlan && ot.programacionSemanalId && ot.otJdeNumero) {
+        await prisma.otProgramada.updateMany({
+          where: {
+            programacionSemanalId: ot.programacionSemanalId,
+            numeroOT: ot.otJdeNumero,
+            ...(ot.otJdeDia ? { dia: ot.otJdeDia } : {}),
+          },
+          data: { estado: estadoPlan },
+        });
+      }
     }
 
     return Response.json({ ok: true, ot: serializeOT(ot as Parameters<typeof serializeOT>[0]) });
