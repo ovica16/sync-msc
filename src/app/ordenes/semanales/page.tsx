@@ -859,38 +859,138 @@ function VistaTecnico({
   );
 }
 
-// ─── Modal de carga CSV ───────────────────────────────────────────────────────
+// ─── Modal de carga Excel / CSV ───────────────────────────────────────────────
+const DIAS_VALIDOS_SET = new Set(["Lu","Ma","Mi","Ju","Vi","Sa","Do"]);
+const GRUPO_MAP_MODAL: Record<string, GrupoTrabajo> = {
+  "Grupo 1":"G1","Grupo 2":"G2","Grupo 3":"G3","Grupo 4":"G4",
+  "Diurno":"Diurno","Nocturno":"Nocturno",
+  "G1":"G1","G2":"G2","G3":"G3","G4":"G4",
+};
+
+function parseSheetRows(rows: unknown[][]): IOTProgramada[] {
+  const ots: IOTProgramada[] = [];
+  for (const row of rows) {
+    const noOT   = row[0];
+    const tipoOT = row[1];
+    const dia    = String(row[12] ?? "").trim();
+    const grupo  = String(row[11] ?? "").trim();
+    if (noOT && typeof noOT === "number" && tipoOT && DIAS_VALIDOS_SET.has(dia)) {
+      const personas   = Number(row[7]) || 1;
+      const hrsTrabajo = Number(row[8]) || 0;
+      const hhTotal    = Number(row[9]) || personas * hrsTrabajo;
+      const personalRaw = String(row[10] ?? "");
+      ots.push({
+        numeroOT:          String(noOT),
+        tipoOT:            String(tipoOT).trim().toUpperCase(),
+        tipoTrabajo:       String(row[2] ?? "").trim(),
+        prioridad:         String(row[3] ?? "").trim() || undefined,
+        descripcion:       String(row[4] ?? "").trim() || `OT ${noOT}`,
+        tag:               String(row[5] ?? "").trim().toUpperCase(),
+        descripcionEquipo: String(row[6] ?? "").trim(),
+        personas, hrsTrabajo, hhTotal,
+        personalAsignado: personalRaw
+          ? personalRaw.split(/[/+]/).map(s => s.trim()).filter(Boolean)
+          : [],
+        grupo: GRUPO_MAP_MODAL[grupo] ?? "Diurno",
+        dia:   dia as DiaSemana,
+        estado: "no_iniciada" as EstadoOTProgramada,
+      });
+    }
+  }
+  return ots;
+}
+
 function CargaCSVModal({
   semana, anio, disciplina, subidoPor, onClose, onSuccess,
 }: {
   semana: number; anio: number; disciplina: string; subidoPor: string;
   onClose: () => void; onSuccess: () => void;
 }) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [modo, setModo] = useState<"excel" | "csv">("excel");
   const [csv, setCsv] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+
+  // Estado Excel
+  const [fileName, setFileName]       = useState("");
+  const [hojas, setHojas]             = useState<string[]>([]);
+  const [hojaSeleccionada, setHoja]   = useState("");
+  const [preview, setPreview]         = useState<IOTProgramada[]>([]);
+  const [parsedRows, setParsedRows]   = useState<unknown[][]>([]);
+  const [loadingExcel, setLoadingExcel] = useState(false);
+
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setFileName(file.name);
+    setError(""); setHojas([]); setHoja(""); setPreview([]);
+    setLoadingExcel(true);
+    try {
+      const XLSX = await import("xlsx");
+      const buffer = await file.arrayBuffer();
+      const wb = XLSX.read(buffer, { type: "array" });
+
+      // Buscar hojas que coincidan con el patrón *-{semana} o *-{semana_2dig}
+      const semStr2 = String(semana).padStart(2, "0");
+      const candidatas = wb.SheetNames.filter(s => {
+        const up = s.toUpperCase();
+        return up.endsWith(`-${semana}`) || up.endsWith(`-${semStr2}`);
+      });
+
+      setHojas(candidatas.length > 0 ? candidatas : wb.SheetNames);
+
+      // Auto-seleccionar si hay exactamente una candidata
+      const auto = candidatas.length === 1 ? candidatas[0] : "";
+      setHoja(auto);
+      if (auto) {
+        const rows = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[auto], { header: 1, defval: "" });
+        setParsedRows(rows);
+        setPreview(parseSheetRows(rows));
+      } else {
+        // Guardar el workbook en ref para usarlo después
+        (fileRef as React.MutableRefObject<unknown>).current = wb;
+      }
+    } catch {
+      setError("No se pudo leer el archivo Excel.");
+    } finally {
+      setLoadingExcel(false);
+    }
+  }
+
+  async function handleHojaChange(nombre: string) {
+    setHoja(nombre);
+    setPreview([]);
+    if (!nombre) return;
+    try {
+      const XLSX = await import("xlsx");
+      // Leer el archivo de nuevo si no tenemos el wb en memoria
+      const file = (fileRef.current as unknown as HTMLInputElement)?.files?.[0];
+      if (!file) return;
+      const buffer = await file.arrayBuffer();
+      const wb = XLSX.read(buffer, { type: "array" });
+      const rows = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[nombre], { header: 1, defval: "" });
+      setParsedRows(rows);
+      setPreview(parseSheetRows(rows));
+    } catch {
+      setError("Error al leer la hoja seleccionada.");
+    }
+  }
 
   function parseCSV(text: string): IOTProgramada[] {
     const lines = text.trim().split("\n").filter((l) => l.trim());
     const header = lines[0].toLowerCase();
     const startRow = header.includes("numeroot") || header.includes("no ot") || header.includes("numero") ? 1 : 0;
-
     return lines.slice(startRow).map((line) => {
       const cols = line.split(/[;,\t]/).map((c) => c.trim().replace(/^"|"$/g, ""));
       const [nOT, tipoOT, tipoTrabajo, prioridad, descripcion, tag, descEq, personas, hrs, personal, grupo, dia] = cols;
       const p = Number(personas) || 1;
       const h = Number(hrs) || 0;
       return {
-        numeroOT: nOT,
-        tipoOT: tipoOT || "P",
-        tipoTrabajo: tipoTrabajo || "",
-        prioridad: prioridad || undefined,
-        descripcion: descripcion || "",
-        tag: (tag || "").toUpperCase(),
-        descripcionEquipo: descEq || "",
-        personas: p,
-        hrsTrabajo: h,
-        hhTotal: p * h,
+        numeroOT: nOT, tipoOT: tipoOT || "P", tipoTrabajo: tipoTrabajo || "",
+        prioridad: prioridad || undefined, descripcion: descripcion || "",
+        tag: (tag || "").toUpperCase(), descripcionEquipo: descEq || "",
+        personas: p, hrsTrabajo: h, hhTotal: p * h,
         personalAsignado: personal ? personal.split("/").map((n) => n.trim()).filter(Boolean) : [],
         grupo: (grupo as GrupoTrabajo) || "Diurno",
         dia: (dia as DiaSemana) || "Lu",
@@ -901,29 +1001,33 @@ function CargaCSVModal({
 
   async function handleGuardar() {
     try {
-      setSaving(true);
-      setError("");
-      const ots = parseCSV(csv);
-      if (!ots.length) { setError("No se encontraron OTs en el CSV"); return; }
+      setSaving(true); setError("");
+      const ots = modo === "excel" ? preview : parseCSV(csv);
+      if (!ots.length) { setError("No se encontraron OTs válidas"); return; }
 
       const lunes   = getMondayOfWeek(anio, semana);
       const domingo = new Date(lunes);
       domingo.setUTCDate(lunes.getUTCDate() + 6);
+
+      // Calcular HH para el payload
+      const hhProgramadas = ots.reduce((s, o) => s + (o.hhTotal ?? 0), 0);
 
       const res = await fetch("/api/programacion-semanal", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           semana, anio, disciplina,
-          fechaInicio: lunes.toISOString(),
-          fechaFin: domingo.toISOString(),
+          fechaInicio:         lunes.toISOString(),
+          fechaFin:            domingo.toISOString(),
+          hhProgramadasSemana: hhProgramadas,
           otsProgramadas: ots,
           personal: [],
           subidoPor,
+          estado: "publicado",
         }),
       });
       const data = await res.json();
-      if (!data.ok) { setError(data.error); return; }
+      if (!data.ok) { setError(data.error ?? "Error al importar"); return; }
       onSuccess();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error inesperado");
@@ -931,6 +1035,9 @@ function CargaCSVModal({
       setSaving(false);
     }
   }
+
+  const otsListas = modo === "excel" ? preview : (csv.trim() ? [] : []);
+  const puedeGuardar = modo === "excel" ? preview.length > 0 : csv.trim().length > 0;
 
   return (
     <div style={{
@@ -940,13 +1047,16 @@ function CargaCSVModal({
     }}>
       <div style={{
         background: "white", borderRadius: 16, boxShadow: "0 8px 40px rgba(15,40,71,0.22)",
-        width: "100%", maxWidth: 680, display: "flex", flexDirection: "column", gap: 18, padding: 28,
+        width: "100%", maxWidth: 700, maxHeight: "90vh", display: "flex", flexDirection: "column", padding: 28, gap: 16,
+        overflowY: "auto",
       }}>
-        {/* Encabezado */}
+        {/* Cabecera */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div>
             <p style={{ fontSize: 17, fontWeight: 800, color: "#0f2847", margin: 0 }}>Subir Programación</p>
-            <p style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }}>Excel / CSV — Semana {semana} · {anio} · {disciplina}</p>
+            <p style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }}>
+              Semana {semana} · {anio} · {disciplina}
+            </p>
           </div>
           <button onClick={onClose} style={{
             width: 32, height: 32, borderRadius: 8, border: "1px solid #e2e8f0",
@@ -955,35 +1065,137 @@ function CargaCSVModal({
           }}>✕</button>
         </div>
 
-        {/* Formato */}
-        <div style={{ background: "#eff6ff", borderRadius: 10, padding: "12px 14px", border: "1px solid #bfdbfe" }}>
-          <p style={{ fontSize: 12, fontWeight: 700, color: "#1d4ed8", marginBottom: 6 }}>
-            Formato de columnas (separadas por ; o tabulador):
-          </p>
-          <p style={{ fontFamily: "monospace", fontSize: 11, color: "#1e40af", lineHeight: 1.6, margin: 0 }}>
-            numeroOT ; tipoOT ; tipoTrabajo ; prioridad ; descripcion ; tag ; descripcionEquipo ; personas ; hrsTrabajo ; personalAsignado ; grupo ; dia
-          </p>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 20px", marginTop: 8, fontSize: 11, color: "#3b82f6" }}>
-            <span>tipoOT: <b>P</b> | <b>C</b> | <b>S</b></span>
-            <span>grupo: <b>G1</b> | <b>G2</b> | <b>G3</b> | <b>G4</b> | <b>Diurno</b> | <b>Nocturno</b></span>
-            <span>dia: <b>Lu</b> | <b>Ma</b> | <b>Mi</b> | <b>Ju</b> | <b>Vi</b> | <b>Sa</b> | <b>Do</b></span>
-          </div>
-          <p style={{ fontSize: 11, color: "#2563eb", marginTop: 6, marginBottom: 0 }}>
-            personalAsignado: nombres separados por / · Primera fila puede ser encabezado
-          </p>
+        {/* Selector de modo */}
+        <div style={{ display: "flex", border: "1px solid #e2e8f0", borderRadius: 10, overflow: "hidden" }}>
+          {(["excel","csv"] as const).map(m => (
+            <button key={m} onClick={() => setModo(m)} style={{
+              flex: 1, padding: "9px 0", border: "none", fontWeight: 700, fontSize: 13, cursor: "pointer",
+              background: modo === m ? "#0f2847" : "white",
+              color: modo === m ? "white" : "#64748b",
+            }}>
+              {m === "excel" ? "📊 Archivo Excel (.xlsx)" : "📝 Pegar CSV"}
+            </button>
+          ))}
         </div>
 
-        {/* Textarea */}
-        <textarea
-          style={{
-            border: "1px solid #e2e8f0", borderRadius: 10, padding: "12px 14px",
-            fontSize: 12, fontFamily: "monospace", height: 180, resize: "none",
-            outline: "none", color: "#1e293b", lineHeight: 1.6,
-          }}
-          placeholder={"893674;P;PdM-MANTENIMIENTO PREDICTIVO;;26S Calibración;ENVSCRTY;Environment;1;10;Vladimir Mendoza;G1;Lu\n893675;C;CMP-MANTTO CORRECTIVO;;Falla en sensor;PIT-410121;Transmisor Presión;2;4;Jorge Llauque/Edgar Calle;Diurno;Ma"}
-          value={csv}
-          onChange={(e) => setCsv(e.target.value)}
-        />
+        {/* ── Modo Excel ── */}
+        {modo === "excel" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {/* Drop zone */}
+            <label style={{
+              display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+              gap: 8, padding: "24px 16px", borderRadius: 12, cursor: "pointer",
+              border: fileName ? "2px solid #86efac" : "2px dashed #cbd5e1",
+              background: fileName ? "#f0fdf4" : "#f8fafc",
+            }}>
+              <span style={{ fontSize: 32 }}>{fileName ? "✅" : "📂"}</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: fileName ? "#16a34a" : "#475569" }}>
+                {fileName || "Seleccionar archivo Excel (.xlsx)"}
+              </span>
+              {!fileName && (
+                <span style={{ fontSize: 11, color: "#94a3b8" }}>
+                  El sistema detectará automáticamente la hoja de semana {semana}
+                </span>
+              )}
+              <input ref={fileRef} type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={handleFileChange} />
+            </label>
+
+            {loadingExcel && (
+              <p style={{ textAlign: "center", color: "#64748b", fontSize: 13 }}>Leyendo archivo…</p>
+            )}
+
+            {/* Selector de hoja si hay varias candidatas o ninguna auto-detectada */}
+            {hojas.length > 1 && !loadingExcel && (
+              <div>
+                <p style={{ fontSize: 12, fontWeight: 700, color: "#475569", marginBottom: 6 }}>
+                  {hojas.some(h => {
+                    const s2 = String(semana).padStart(2,"0");
+                    return h.toUpperCase().endsWith(`-${semana}`) || h.toUpperCase().endsWith(`-${s2}`);
+                  })
+                    ? `Se encontraron ${hojas.length} hojas para semana ${semana} — selecciona la correcta:`
+                    : `No se detectó hoja para semana ${semana}. Selecciona manualmente:`
+                  }
+                </p>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {hojas.map(h => (
+                    <button key={h} onClick={() => handleHojaChange(h)} style={{
+                      padding: "6px 14px", borderRadius: 8, cursor: "pointer", fontWeight: 700, fontSize: 12,
+                      border: `2px solid ${hojaSeleccionada === h ? "#0f2847" : "#e2e8f0"}`,
+                      background: hojaSeleccionada === h ? "#0f2847" : "white",
+                      color: hojaSeleccionada === h ? "white" : "#475569",
+                    }}>
+                      {h}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Preview */}
+            {preview.length > 0 && (
+              <div style={{ background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 10, padding: "12px 14px" }}>
+                <p style={{ fontSize: 13, fontWeight: 800, color: "#16a34a", margin: "0 0 10px" }}>
+                  ✓ {preview.length} OTs detectadas en hoja &quot;{hojaSeleccionada}&quot;
+                </p>
+                <div style={{ maxHeight: 200, overflowY: "auto", fontSize: 12 }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                    <thead>
+                      <tr style={{ background: "#dcfce7" }}>
+                        {["OT","Tipo","Descripción","TAG","Pers.","HH","Grupo","Día"].map(h => (
+                          <th key={h} style={{ padding: "5px 8px", textAlign: "left", fontSize: 10, fontWeight: 700, color: "#15803d", whiteSpace: "nowrap" }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {preview.slice(0, 10).map((o, i) => (
+                        <tr key={i} style={{ borderBottom: "1px solid #f0fdf4" }}>
+                          <td style={{ padding: "4px 8px", fontWeight: 700 }}>{o.numeroOT}</td>
+                          <td style={{ padding: "4px 8px" }}>{o.tipoOT}</td>
+                          <td style={{ padding: "4px 8px", maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{o.descripcion}</td>
+                          <td style={{ padding: "4px 8px", fontFamily: "monospace" }}>{o.tag}</td>
+                          <td style={{ padding: "4px 8px", textAlign: "center" }}>{o.personas}</td>
+                          <td style={{ padding: "4px 8px", textAlign: "center" }}>{o.hhTotal}</td>
+                          <td style={{ padding: "4px 8px" }}>{o.grupo}</td>
+                          <td style={{ padding: "4px 8px" }}>{o.dia}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {preview.length > 10 && (
+                    <p style={{ color: "#64748b", fontSize: 11, margin: "6px 0 0", textAlign: "center" }}>
+                      …y {preview.length - 10} OTs más
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {fileName && !loadingExcel && preview.length === 0 && hojaSeleccionada && (
+              <p style={{ color: "#ea580c", fontSize: 13, textAlign: "center" }}>
+                No se encontraron OTs válidas en la hoja &quot;{hojaSeleccionada}&quot;
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* ── Modo CSV ── */}
+        {modo === "csv" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ background: "#eff6ff", borderRadius: 10, padding: "10px 14px", border: "1px solid #bfdbfe", fontSize: 11, color: "#1e40af" }}>
+              <b>Formato:</b> numeroOT ; tipoOT ; tipoTrabajo ; prioridad ; descripcion ; tag ; descEquipo ; personas ; hrsTrabajo ; personal ; grupo ; dia
+            </div>
+            <textarea
+              style={{
+                border: "1px solid #e2e8f0", borderRadius: 10, padding: "12px 14px",
+                fontSize: 12, fontFamily: "monospace", height: 200, resize: "none",
+                outline: "none", color: "#1e293b", lineHeight: 1.6,
+              }}
+              placeholder={"893674;PDM;PdM-PREDICTIVO;;26S Calibración;ENVSCRTY;Environment;1;10;Vladimir Mendoza;G1;Lu"}
+              value={csv}
+              onChange={(e) => setCsv(e.target.value)}
+            />
+          </div>
+        )}
 
         {error && (
           <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "8px 12px", fontSize: 13, color: "#dc2626" }}>
@@ -1001,14 +1213,15 @@ function CargaCSVModal({
           </button>
           <button
             onClick={handleGuardar}
-            disabled={saving || !csv.trim()}
+            disabled={saving || !puedeGuardar}
             style={{
               padding: "9px 20px", borderRadius: 8, border: "none",
-              background: saving || !csv.trim() ? "#94a3b8" : "#0f2847",
-              color: "white", fontSize: 14, fontWeight: 700, cursor: saving || !csv.trim() ? "not-allowed" : "pointer",
+              background: saving || !puedeGuardar ? "#94a3b8" : "#0f2847",
+              color: "white", fontSize: 14, fontWeight: 700,
+              cursor: saving || !puedeGuardar ? "not-allowed" : "pointer",
             }}
           >
-            {saving ? "Importando..." : "↑ Importar programación"}
+            {saving ? "Importando..." : `↑ Importar ${otsListas.length > 0 ? `${otsListas.length} OTs` : "programación"}`}
           </button>
         </div>
       </div>
