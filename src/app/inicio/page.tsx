@@ -16,7 +16,7 @@ const MODULOS_BASE: {
     href: "/ordenes",
     label: "Órdenes de Trabajo",
     descripcion: "Registro, reportes y gestión de OTs",
-    roles: [1, 2, 3, 4],
+    roles: [1, 2, 3, 4, 6],
     icon: (
       <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
@@ -48,6 +48,7 @@ const ROL_COLOR: Record<number, string> = {
   2: "#0891b2",
   3: "#2563eb",
   4: "#16a34a",
+  6: "#d97706",
 };
 
 export default function InicioPage() {
