@@ -1269,10 +1269,17 @@ export default function RegistroOTPage() {
       usuarioId: "",
       nombreCompleto: nombre,
     }));
-    // Agregar usuario logueado si es técnico y no está ya en la lista
+    // Agregar usuario logueado si es técnico y no está ya en la lista.
+    // Usamos nombreCoincide para manejar diferencias de orden (ej: "Sabino Taquichiri" vs "Taquichiri Mamani Sabino")
     if (user && user.rol === 4) {
-      const yaEsta = tecnicos.some(t => t.nombreCompleto.toLowerCase() === user.nombre.toLowerCase());
-      if (!yaEsta) tecnicos.push({ usuarioId: user.id, nombreCompleto: user.nombre });
+      const yaEsta = tecnicos.some(t => nombreCoincide(t.nombreCompleto, user.nombre) || nombreCoincide(user.nombre, t.nombreCompleto));
+      if (yaEsta) {
+        // Reemplazar la entrada del plan con el nombre oficial del sistema + usuarioId
+        const idx = tecnicos.findIndex(t => nombreCoincide(t.nombreCompleto, user.nombre) || nombreCoincide(user.nombre, t.nombreCompleto));
+        if (idx >= 0) tecnicos[idx] = { usuarioId: user.id, nombreCompleto: user.nombre };
+      } else {
+        tecnicos.push({ usuarioId: user.id, nombreCompleto: user.nombre });
+      }
     }
     setForm({
       fecha: shiftFecha,
