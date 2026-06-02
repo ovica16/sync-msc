@@ -650,14 +650,17 @@ export default function CalibracionPage() {
       .then((d: UserOpt[]) => setTecnicos(d))
       .catch(() => {});
 
-    fetch("/api/usuarios?rol=3")
-      .then((r) => r.json())
-      .then((d: UserOpt[]) => {
-        const filtrados = d.filter((u) => {
-          const area = (u.areaTrabajo ?? "").toLowerCase();
-          return area.includes("instrument") || area.includes("eléct") || area.includes("elect");
-        });
-        setSupervisores(filtrados.length > 0 ? filtrados : d);
+    // Supervisores: rol=3 del área 3320 + Superintendentes rol=1 que pueden firmar
+    Promise.all([
+      fetch("/api/usuarios?rol=3&area=3320").then((r) => r.json()),
+      fetch("/api/usuarios?rol=1").then((r) => r.json()),
+    ])
+      .then(([sups, supers]: [UserOpt[], UserOpt[]]) => {
+        const combined = [
+          ...sups,
+          ...supers.filter((u) => !sups.some((s) => s.id === u.id)),
+        ];
+        setSupervisores(combined);
       })
       .catch(() => {});
 
