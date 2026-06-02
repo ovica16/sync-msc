@@ -4,11 +4,14 @@ import PrintClientTecnico from "./PrintClientTecnico";
 
 type Params = { params: Promise<{ id: string }> };
 
+type LineaDisplay = { tag: string; tipoOT: string; descripcion: string; resolucion: string; hh: number };
+
 type OTDisplay = {
   id: string; numeroOT: string; tag: string; tipoOT: string;
   descripcion: string; tecnicos: string[]; hhTotal: number;
   estado: string; critica: boolean; pendiente: boolean; nota: string;
-  esPlan?: boolean; // OT del plan semanal (no registrada en sistema)
+  esPlan?: boolean; esGuardia?: boolean; bitacora?: BitacoraEntry[];
+  lineas?: LineaDisplay[]; // todas las líneas expandidas
 };
 
 type BitacoraEntry = { turno: string; supervisor: string; nota: string; hhAtendidas: number; fecha?: string };
@@ -41,6 +44,7 @@ export default async function ImprimirReporteTecnicoPage({ params }: Params) {
 
   const otsRegistradas: OTDisplay[] = ordenes.map(o => {
     const linea = o.lineas[0];
+    const hhTotal = o.lineas.reduce((s, l) => s + (l.tiempoRealHrs ?? 0), 0);
     return {
       id: o.id,
       numeroOT: o.numeroOT,
@@ -48,12 +52,19 @@ export default async function ImprimirReporteTecnicoPage({ params }: Params) {
       tipoOT: linea?.tipoOT ?? "",
       descripcion: linea?.sintoma ?? linea?.descripcionEquipo ?? linea?.descripcionTrabajo ?? "",
       tecnicos: o.tecnicos.map(t => t.nombreCompleto),
-      hhTotal: linea?.tiempoRealHrs ?? 0,
+      hhTotal,
       estado: o.estado,
       critica: criticas.has(o.id),
       pendiente: pendientes.has(o.id),
       nota: notasMap.get(o.id) ?? "",
       esPlan: false,
+      lineas: o.lineas.map(l => ({
+        tag: l.tag,
+        tipoOT: l.tipoOT,
+        descripcion: l.sintoma ?? l.descripcionEquipo ?? l.descripcionTrabajo ?? "",
+        resolucion: (l as Record<string, unknown>).resolucionAplicada as string ?? "",
+        hh: l.tiempoRealHrs ?? 0,
+      })),
     };
   });
 

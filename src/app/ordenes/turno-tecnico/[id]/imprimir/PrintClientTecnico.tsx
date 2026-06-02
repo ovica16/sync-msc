@@ -1,12 +1,14 @@
 "use client";
 
 type BitacoraEntry = { turno: string; supervisor: string; nota: string; hhAtendidas: number; fecha?: string };
+type LineaDisplay  = { tag: string; tipoOT: string; descripcion: string; resolucion: string; hh: number };
 
 type OTDisplay = {
   id: string; numeroOT: string; tag: string; tipoOT: string;
   descripcion: string; tecnicos: string[]; hhTotal: number;
   estado: string; critica: boolean; pendiente: boolean; nota: string;
   esPlan?: boolean; esGuardia?: boolean; bitacora?: BitacoraEntry[];
+  lineas?: LineaDisplay[];
 };
 
 type Novedad = { prioridad: string; tag?: string; descripcion: string };
@@ -235,25 +237,65 @@ export default function PrintClientTecnico({
             )}
             {otsRegistradas.map((ot, idx) => {
               const concluida = ["completada","concluido","revisado"].includes(ot.estado);
+              const lineas = ot.lineas && ot.lineas.length > 0 ? ot.lineas : null;
+              const baseIdx = otsPlan.length + idx + 1;
+              const bgRow = ot.critica ? "#fff1f2" : concluida ? "#f0fdf4" : "white";
+              const estadoBadge = concluida
+                ? <span style={{ color: "#16a34a", background: "#dcfce7", padding: "2px 5px", borderRadius: 3 }}>EJECUTADA</span>
+                : <span style={{ color: "#92400e", background: "#fef3c7", padding: "2px 5px", borderRadius: 3 }}>PENDIENTE</span>;
+
+              if (lineas && lineas.length > 1) {
+                // Encabezado de OT + una sub-fila por línea
+                return [
+                  // Fila encabezado de OT
+                  <tr key={`${ot.id}-hdr`} style={{ background: "#e8f0fe" }}>
+                    <td style={{ textAlign: "center", fontSize: 8, fontWeight: "bold" }}>{baseIdx}</td>
+                    <td colSpan={4} style={{ fontSize: 8, fontWeight: "bold", color: "#1e40af" }}>
+                      OT #{ot.numeroOT} · {ot.tecnicos.join(", ")} · {ot.hhTotal}HH
+                    </td>
+                    <td colSpan={2} style={{ fontSize: 8, fontStyle: ot.nota ? "normal" : "italic", color: ot.nota ? "#1e293b" : "#94a3b8" }}>
+                      {ot.nota || "—"}
+                      {ot.critica   && <span style={{ fontSize: 7, color: "#dc2626", fontWeight: "bold" }}> ⚠ CRÍTICA</span>}
+                      {ot.pendiente && <span style={{ fontSize: 7, color: "#d97706", fontWeight: "bold" }}> → SGTE TURNO</span>}
+                    </td>
+                    <td style={{ textAlign: "center", fontSize: 7.5 }}>{estadoBadge}</td>
+                  </tr>,
+                  // Una fila por línea de trabajo
+                  ...lineas.map((l, li) => (
+                    <tr key={`${ot.id}-l${li}`} style={{ background: bgRow }}>
+                      <td style={{ textAlign: "center", fontSize: 7, color: "#94a3b8" }}>{baseIdx}.{li + 1}</td>
+                      <td style={{ textAlign: "center", fontSize: 8, fontWeight: "bold", color: TIPO_COLOR[l.tipoOT] ?? "#000" }}>{l.tipoOT}</td>
+                      <td style={{ fontWeight: "bold", fontFamily: "monospace", fontSize: 8 }}>{l.tag}</td>
+                      <td style={{ textAlign: "center", fontSize: 8 }}>{l.hh || "—"}</td>
+                      <td style={{ fontFamily: "monospace", fontSize: 7, color: "#64748b" }}>{ot.numeroOT}</td>
+                      <td style={{ fontSize: 8 }}>
+                        {l.descripcion && <div>{l.descripcion}</div>}
+                        {l.resolucion  && <div style={{ color: "#16a34a", fontStyle: "italic" }}>✓ {l.resolucion}</div>}
+                      </td>
+                      <td colSpan={2} style={{ fontSize: 7, color: "#64748b" }}>{ot.tecnicos.join(", ")}</td>
+                    </tr>
+                  )),
+                ];
+              }
+
+              // OT con una sola línea — fila simple
               return (
-                <tr key={ot.id} style={{ background: ot.critica ? "#fff1f2" : concluida ? "#f0fdf4" : "white" }}>
-                  <td style={{ textAlign: "center", fontSize: 8 }}>{otsPlan.length + idx + 1}</td>
+                <tr key={ot.id} style={{ background: bgRow }}>
+                  <td style={{ textAlign: "center", fontSize: 8 }}>{baseIdx}</td>
                   <td style={{ textAlign: "center", fontSize: 8, fontWeight: "bold", color: TIPO_COLOR[ot.tipoOT] ?? "#000" }}>{ot.tipoOT}</td>
                   <td style={{ fontWeight: "bold", fontFamily: "monospace", fontSize: 8 }}>{ot.tag}</td>
                   <td style={{ textAlign: "center", fontSize: 8 }}>{ot.hhTotal || "—"}</td>
                   <td style={{ fontFamily: "monospace", fontSize: 8 }}>{ot.numeroOT}</td>
-                  <td style={{ fontSize: 8 }}>{ot.descripcion}</td>
+                  <td style={{ fontSize: 8 }}>
+                    {ot.descripcion}
+                    {lineas?.[0]?.resolucion && <div style={{ color: "#16a34a", fontStyle: "italic", fontSize: 7 }}>✓ {lineas[0].resolucion}</div>}
+                  </td>
                   <td style={{ fontSize: 8, fontStyle: ot.nota ? "normal" : "italic", color: ot.nota ? "#1e293b" : "#94a3b8" }}>
                     {ot.nota || "—"}
                     {ot.critica   && <div style={{ fontSize: 7, color: "#dc2626", fontWeight: "bold" }}>⚠ CRÍTICA</div>}
                     {ot.pendiente && <div style={{ fontSize: 7, color: "#d97706", fontWeight: "bold" }}>→ SGTE TURNO</div>}
                   </td>
-                  <td style={{ textAlign: "center", fontSize: 7.5, fontWeight: "bold" }}>
-                    {concluida
-                      ? <span style={{ color: "#16a34a", background: "#dcfce7", padding: "2px 5px", borderRadius: 3 }}>EJECUTADA</span>
-                      : <span style={{ color: "#92400e", background: "#fef3c7", padding: "2px 5px", borderRadius: 3 }}>PENDIENTE</span>
-                    }
-                  </td>
+                  <td style={{ textAlign: "center", fontSize: 7.5, fontWeight: "bold" }}>{estadoBadge}</td>
                 </tr>
               );
             })}
