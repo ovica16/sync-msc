@@ -44,8 +44,8 @@ const migraciones = [
   // Asegurar contador 2026 >= 286 (9 certs reales subidos, próximo = 287)
   try {
     await pool.query(
-      `INSERT INTO "Contador" (nombre, valor) VALUES ('calibracion-2026', 289)
-       ON CONFLICT (nombre) DO UPDATE SET valor = GREATEST("Contador".valor, 289)`
+      `INSERT INTO "Contador" (nombre, valor) VALUES ('calibracion-2026', 290)
+       ON CONFLICT (nombre) DO UPDATE SET valor = GREATEST("Contador".valor, 290)`
     );
     console.log('[migrate] Contador calibracion-2026 OK.');
   } catch(e) {
