@@ -274,8 +274,8 @@ function Dashboard({
               }}>
                 <span style={{ fontSize: 9, fontWeight: 800, color: "#94a3b8", letterSpacing: "0.07em" }}>{DIAS_CORTO[dia]}</span>
                 <span style={{ fontSize: 9, color: "#cbd5e1", marginTop: 1 }}>{fmtFecha(fechasDias[dia])}</span>
-                <span style={{ fontSize: 15, fontWeight: 800, color: "#1e293b", marginTop: 3 }}>{hhEjecDia}/{hhDia}HH</span>
-                <span style={{ fontSize: 11, fontWeight: 700, color, marginTop: 1 }}>{tot > 0 ? `${p}%` : "—"}</span>
+                <span style={{ fontSize: 17, fontWeight: 900, color, marginTop: 3 }}>{tot > 0 ? `${p}%` : "—"}</span>
+                <span style={{ fontSize: 10, fontWeight: 600, color: "#64748b", marginTop: 1 }}>{hhEjecDia}/{hhDia}HH</span>
                 {concluidas > 0 && (
                   <span style={{ fontSize: 9, color: "#16a34a", marginTop: 1 }}>{concluidas}/{tot} cerradas</span>
                 )}
