@@ -49,11 +49,13 @@ type UsuarioItem = {
   _id: string; nombre: string; apellido: string; email: string;
   jde: string; celular: string; puesto: string; superintendencia: string; areaTrabajo: string;
   rol: number; areas: string[]; disciplina?: string; activo: boolean;
+  esContratista: boolean; fechaExpiracion: string | null;
 };
 type UsuarioForm = {
   nombre: string; email: string; password?: string; rol: string;
   jde: string; celular: string; puesto: string; superintendencia: string; areaTrabajo: string;
   areas: string[]; disciplina: string;
+  esContratista: boolean; fechaExpiracion: string;
 };
 type AreaItem = {
   _id: string; codigo: string; nombre: string;
@@ -86,11 +88,11 @@ const CRIT: Record<string, { bg: string; color: string }> = {
   B: { bg: "#fef3c7", color: "#d97706" },
   C: { bg: "#dcfce7", color: "#16a34a" },
 };
-const ROL_LABEL: Record<number, string> = { 1: "Admin", 2: "Superintendente", 3: "Supervisor", 4: "Técnico", 5: "Planificador" };
+const ROL_LABEL: Record<number, string> = { 1: "Admin", 2: "Superintendente", 3: "Supervisor", 4: "Técnico", 5: "Planificador", 6: "Contratista" };
 const ROL_CLR: Record<number, { bg: string; color: string }> = {
   1: { bg: "#ede9fe", color: "#7c3aed" }, 2: { bg: "#e0f2fe", color: "#0369a1" },
   3: { bg: "#ccfbf1", color: "#0f766e" }, 4: { bg: "#f1f5f9", color: "#475569" },
-  5: { bg: "#fef9c3", color: "#854d0e" },
+  5: { bg: "#fef9c3", color: "#854d0e" }, 6: { bg: "#fff7ed", color: "#c2410c" },
 };
 
 // ─── CSV utilities ─────────────────────────────────────────────────────────────
@@ -1071,6 +1073,7 @@ function UsuariosTab() {
     nombre: "", email: "", password: "", rol: "4",
     jde: "", celular: "", puesto: "", superintendencia: "", areaTrabajo: "",
     areas: [], disciplina: "GENERAL",
+    esContratista: false, fechaExpiracion: "",
   });
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
@@ -1093,6 +1096,7 @@ function UsuariosTab() {
       nombre: "", email: "", password: "", rol: "4",
       jde: "", celular: "", puesto: "", superintendencia: "", areaTrabajo: "",
       areas: [], disciplina: "GENERAL",
+      esContratista: false, fechaExpiracion: "",
     });
     setErr("");
     setShowForm(true);
@@ -1103,7 +1107,7 @@ function UsuariosTab() {
     setForm({
       nombre: item.nombre,
       email: item.email ?? "",
-      password: "", // Contraseña vacía por defecto
+      password: "",
       rol: String(item.rol),
       jde: item.jde ?? "",
       celular: item.celular ?? "",
@@ -1112,6 +1116,8 @@ function UsuariosTab() {
       areaTrabajo: item.areaTrabajo ?? "",
       areas: item.areas ?? [],
       disciplina: item.disciplina ?? "GENERAL",
+      esContratista: item.esContratista ?? false,
+      fechaExpiracion: item.fechaExpiracion ? item.fechaExpiracion.slice(0, 10) : "",
     });
     setErr("");
     setShowForm(true);
@@ -1139,7 +1145,7 @@ function UsuariosTab() {
     setSaving(false);
     if (!data.ok) { setErr(data.error ?? "Error al guardar"); return; }
     setShowForm(false);
-    setForm({ nombre: "", email: "", password: "", rol: "4", jde: "", celular: "", puesto: "", superintendencia: "", areaTrabajo: "", areas: [], disciplina: "GENERAL" });
+    setForm({ nombre: "", email: "", password: "", rol: "4", jde: "", celular: "", puesto: "", superintendencia: "", areaTrabajo: "", areas: [], disciplina: "GENERAL", esContratista: false, fechaExpiracion: "" });
     load();
   }
 
@@ -1226,13 +1232,53 @@ function UsuariosTab() {
             </div>
             <div>
               <label style={C.label}>Rol *</label>
-              <select style={C.select} value={form.rol} onChange={(e) => upd("rol", e.target.value)}>
+              <select style={C.select} value={form.rol} onChange={(e) => {
+                const v = e.target.value;
+                setForm(f => ({ ...f, rol: v, esContratista: v === "6" ? true : f.esContratista }));
+              }}>
                 <option value="1">1 — Administrador</option>
                 <option value="2">2 — Superintendente</option>
                 <option value="3">3 — Supervisor</option>
                 <option value="4">4 — Técnico</option>
                 <option value="5">5 — Planificador</option>
+                <option value="6">6 — Contratista</option>
               </select>
+            </div>
+            {/* ── Sección Contratista ── */}
+            <div style={{ gridColumn: "span 2", display: "flex", gap: 16, alignItems: "flex-end" }}>
+              <div style={{
+                display: "flex", alignItems: "center", gap: 10,
+                padding: "10px 14px", borderRadius: 8,
+                background: form.esContratista ? "#fff7ed" : "#f8fafc",
+                border: `1.5px solid ${form.esContratista ? "#fed7aa" : "#e2e8f0"}`,
+                flex: 1,
+              }}>
+                <input
+                  type="checkbox"
+                  id="chk-contratista"
+                  checked={form.esContratista}
+                  onChange={(e) => setForm(f => ({
+                    ...f,
+                    esContratista: e.target.checked,
+                    rol: e.target.checked && f.rol !== "6" ? "6" : f.rol,
+                  }))}
+                  style={{ width: 16, height: 16, cursor: "pointer" }}
+                />
+                <label htmlFor="chk-contratista" style={{ ...C.label, margin: 0, cursor: "pointer", color: form.esContratista ? "#c2410c" : "#475569" }}>
+                  Es contratista (temporal)
+                </label>
+              </div>
+              {form.esContratista && (
+                <div style={{ flex: 1 }}>
+                  <label style={C.label}>Fecha de expiración del acceso</label>
+                  <input
+                    type="date"
+                    style={{ ...C.input, borderColor: form.fechaExpiracion && new Date(form.fechaExpiracion) < new Date() ? "#fca5a5" : "#cbd5e1" }}
+                    value={form.fechaExpiracion}
+                    onChange={(e) => upd("fechaExpiracion", e.target.value)}
+                  />
+                </div>
+              )}
             </div>
             <div>
               <label style={C.label}>Disciplina *</label>
@@ -1369,7 +1415,30 @@ function UsuariosTab() {
                       <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={item.puesto}>{item.puesto || "—"}</div>
                       {item.superintendencia && <div style={{ fontSize: 11, color: "#94a3b8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={item.superintendencia}>{item.superintendencia}</div>}
                     </td>
-                    <td style={C.td}><Badge bg={rc.bg} color={rc.color}>{ROL_LABEL[item.rol] ?? item.rol}</Badge></td>
+                    <td style={C.td}>
+                      <Badge bg={rc.bg} color={rc.color}>{ROL_LABEL[item.rol] ?? item.rol}</Badge>
+                      {item.esContratista && (() => {
+                        const exp = item.fechaExpiracion ? new Date(item.fechaExpiracion) : null;
+                        const vencido = exp && exp < new Date();
+                        return (
+                          <div style={{ marginTop: 4 }}>
+                            <span style={{
+                              display: "inline-block", padding: "1px 7px", borderRadius: 20,
+                              fontSize: 10, fontWeight: 700,
+                              background: vencido ? "#fee2e2" : "#fff7ed",
+                              color: vencido ? "#dc2626" : "#c2410c",
+                            }}>
+                              {vencido ? "⚠ Expirado" : "Contratista"}
+                            </span>
+                            {exp && (
+                              <div style={{ fontSize: 10, color: vencido ? "#dc2626" : "#94a3b8", marginTop: 1 }}>
+                                {vencido ? "Venció " : "Hasta "}{exp.toLocaleDateString("es-BO")}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </td>
                     <td style={C.td}><Badge bg={item.activo ? "#dcfce7" : "#f1f5f9"} color={item.activo ? "#16a34a" : "#94a3b8"}>{item.activo ? "Activo" : "Inactivo"}</Badge></td>
                     <td style={C.td}>
                       <button style={{ ...C.btnSmall, marginRight: 4 }} onClick={() => openEdit(item)}>Editar</button>

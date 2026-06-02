@@ -129,18 +129,25 @@ function StepIndicator({ step }: { step: number }) {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
+function localDateStr(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 // Turnos: Diurno 06:30–18:29 · Nocturno 18:30–06:29 (cruza medianoche)
 function getFechaTurno() {
   const ahora = new Date();
   const min = ahora.getHours() * 60 + ahora.getMinutes();
   if (min >= 18 * 60 + 30) {
-    return { fecha: ahora.toISOString().split("T")[0], turno: "Nocturno" as const };
+    return { fecha: localDateStr(ahora), turno: "Nocturno" as const };
   } else if (min < 6 * 60 + 30) {
     const ayer = new Date(ahora);
     ayer.setDate(ayer.getDate() - 1);
-    return { fecha: ayer.toISOString().split("T")[0], turno: "Nocturno" as const };
+    return { fecha: localDateStr(ayer), turno: "Nocturno" as const };
   }
-  return { fecha: ahora.toISOString().split("T")[0], turno: "Diurno" as const };
+  return { fecha: localDateStr(ahora), turno: "Diurno" as const };
 }
 
 export default function ReporteTurnoPage() {
@@ -509,7 +516,7 @@ export default function ReporteTurnoPage() {
                     <div style={{ flex: 1 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
                         <span style={{ fontWeight: 800, fontSize: 15, color: "#0f2847" }}>
-                          {new Date(r.fecha).toLocaleDateString("es-BO", { day: "2-digit", month: "short", year: "numeric" })}
+                          {new Date(r.fecha).toLocaleDateString("es-BO", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" })}
                         </span>
                         <span style={S.badge(enviado ? "#16a34a" : "#64748b")}>{enviado ? "Enviado" : "Borrador"}</span>
                         <span style={S.badge(r.turno === "Nocturno" ? "#7c3aed" : "#0891b2")}>{r.turno}</span>

@@ -171,7 +171,7 @@ function exportarCSV(ots: OT[], tag: string, equipo: Equipo | null) {
     const l = ot.lineas.find(x => x.tag === tag);
     if (!l) continue;
     const cols = [
-      ot.numeroOT, new Date(ot.fecha).toLocaleDateString("es-BO"),
+      ot.numeroOT, new Date(ot.fecha).toLocaleDateString("es-BO", { timeZone: "UTC" }),
       ot.turno, l.tipoOT, l.disciplina ?? "",
       l.sintoma ?? l.descripcionTrabajo ?? "",
       l.causaProbable ?? "", l.resolucionAplicada ?? "",
@@ -588,7 +588,7 @@ export default function ReporteTAGPage() {
                           <div style={{ flex: 1, background: "#f8fafc", borderRadius: 8, padding: "8px 12px", border: `1px solid ${color}25` }}>
                             <div style={{ display: "flex", gap: 7, alignItems: "center", marginBottom: 2 }}>
                               <span style={{ fontWeight: 700, fontSize: 12, color: "#0f2847" }}>
-                                {new Date(ot.fecha).toLocaleDateString("es-BO")}
+                                {new Date(ot.fecha).toLocaleDateString("es-BO", { timeZone: "UTC" })}
                               </span>
                               <span style={S.badge(color)}>{linea.tipoOT}</span>
                               <span style={{ fontSize: 11, color: "#94a3b8" }}>OT #{ot.numeroOT}</span>
@@ -639,7 +639,7 @@ export default function ReporteTAGPage() {
                             <span style={{ fontWeight: 800, fontSize: 14, color: "#0f2847" }}>OT #{ot.numeroOT}</span>
                             <span style={S.badge(color)}>{linea.tipoOT}</span>
                             <span style={{ fontSize: 12, color: "#94a3b8" }}>
-                              {new Date(ot.fecha).toLocaleDateString("es-BO")} · {ot.turno}
+                              {new Date(ot.fecha).toLocaleDateString("es-BO", { timeZone: "UTC" })} · {ot.turno}
                             </span>
                             {linea.tiempoRealHrs && (
                               <span style={{ fontSize: 12, color: "#16a34a", fontWeight: 600 }}>{linea.tiempoRealHrs}h</span>
