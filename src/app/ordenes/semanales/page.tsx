@@ -220,6 +220,8 @@ function Dashboard({
   fechasDias: Record<DiaSemana, Date>;
   semana: number;
 }) {
+  const ESTADOS_ACTIVOS: EstadoOTProgramada[] = ["en_proceso", "en_revision", "completada"];
+
   const ots = programa.otsProgramadas ?? [];
   const total       = ots.length;
   const completadas = ots.filter((o) => o.estado === "completada").length;
@@ -228,10 +230,12 @@ function Dashboard({
   const atrasadas   = ots.filter((o) => o.estado === "atrasada").length;
   const bloqueadas  = ots.filter((o) => o.estado === "bloqueada").length;
   const hhProg      = programa.hhProgramadasSemana ?? 0;
-  const hhEjec      = ots.filter((o) => o.estado === "completada").reduce((s, o) => s + (o.hhTotal ?? 0), 0);
-  const eficiencia  = pct(hhEjec, hhProg);
+  // HH ejecutadas = todas las OTs activas (en_proceso + en_revision + completada)
+  const hhEjec      = ots.filter((o) => ESTADOS_ACTIVOS.includes(o.estado)).reduce((s, o) => s + (o.hhTotal ?? 0), 0);
+  // Progreso principal basado en HH, no en OTs completadas
+  const progreso    = pct(hhEjec, hhProg);
+  const eficiencia  = progreso;
   const sinTecnico  = ots.filter((o) => !o.personalAsignado?.length).length;
-  const progreso    = pct(completadas, total);
   const barColor    = progreso >= 80 ? "#16a34a" : progreso >= 50 ? "#2563eb" : "#ea580c";
 
   return (
@@ -243,7 +247,7 @@ function Dashboard({
             PROGRESO SEMANA {semana} — {programa.disciplina}
           </span>
           <span style={{ fontSize: 12, fontWeight: 700, color: "#1e293b" }}>
-            {progreso}% &nbsp;·&nbsp; {completadas}/{total} OTs ejecutadas
+            {progreso}% &nbsp;·&nbsp; {hhEjec}/{hhProg} HH ejecutadas
           </span>
         </div>
         <div style={{ height: 10, background: "#f1f5f9", borderRadius: 6, overflow: "hidden" }}>
@@ -255,14 +259,13 @@ function Dashboard({
       <div style={{ padding: "4px 20px 10px", overflowX: "auto" }}>
         <div style={{ display: "flex", gap: 6, minWidth: "max-content" }}>
           {DIAS.map((dia) => {
-            const otsDia = ots.filter((o) => o.dia === dia);
+            const otsDia    = ots.filter((o) => o.dia === dia);
+            const hhDia     = otsDia.reduce((s, o) => s + (o.hhTotal ?? 0), 0);
+            const hhEjecDia = otsDia.filter((o) => ESTADOS_ACTIVOS.includes(o.estado)).reduce((s, o) => s + (o.hhTotal ?? 0), 0);
             const concluidas = otsDia.filter((o) => o.estado === "completada").length;
-            const iniciadas  = otsDia.filter((o) => ["completada", "en_proceso", "en_revision"].includes(o.estado)).length;
-            const hecho  = concluidas;
-            const tot    = otsDia.length;
-            const p      = pct(hecho, tot);
-            const hhDia  = otsDia.reduce((s, o) => s + (o.hhTotal ?? 0), 0);
-            const color  = p === 100 ? "#16a34a" : p >= 70 ? "#2563eb" : p > 0 ? "#ea580c" : "#94a3b8";
+            const tot        = otsDia.length;
+            const p          = pct(hhEjecDia, hhDia);
+            const color      = p === 100 ? "#16a34a" : p >= 70 ? "#2563eb" : p > 0 ? "#ea580c" : "#94a3b8";
             return (
               <div key={dia} style={{
                 display: "flex", flexDirection: "column", alignItems: "center",
@@ -271,12 +274,11 @@ function Dashboard({
               }}>
                 <span style={{ fontSize: 9, fontWeight: 800, color: "#94a3b8", letterSpacing: "0.07em" }}>{DIAS_CORTO[dia]}</span>
                 <span style={{ fontSize: 9, color: "#cbd5e1", marginTop: 1 }}>{fmtFecha(fechasDias[dia])}</span>
-                <span style={{ fontSize: 15, fontWeight: 800, color: "#1e293b", marginTop: 3 }}>{hecho}/{tot}</span>
+                <span style={{ fontSize: 15, fontWeight: 800, color: "#1e293b", marginTop: 3 }}>{hhEjecDia}/{hhDia}HH</span>
                 <span style={{ fontSize: 11, fontWeight: 700, color, marginTop: 1 }}>{tot > 0 ? `${p}%` : "—"}</span>
-                {iniciadas > hecho && (
-                  <span style={{ fontSize: 9, color: "#2563eb", marginTop: 1 }}>{iniciadas - hecho} en curso</span>
+                {concluidas > 0 && (
+                  <span style={{ fontSize: 9, color: "#16a34a", marginTop: 1 }}>{concluidas}/{tot} cerradas</span>
                 )}
-                {hhDia > 0 && <span style={{ fontSize: 9, color: "#94a3b8", marginTop: 2 }}>{hhDia}HH</span>}
               </div>
             );
           })}
@@ -294,7 +296,7 @@ function Dashboard({
         <span style={{ color: "#475569" }}>
           HH prog: <b style={{ color: "#0f2847" }}>{hhProg}</b>
           &nbsp;·&nbsp; HH ejec: <b style={{ color: "#0f2847" }}>{hhEjec}</b>
-          &nbsp;·&nbsp; Eficiencia: <b style={{ color: eficiencia >= 80 ? "#16a34a" : "#ea580c" }}>{eficiencia}%</b>
+          &nbsp;·&nbsp; Avance: <b style={{ color: progreso >= 80 ? "#16a34a" : "#ea580c" }}>{progreso}%</b>
         </span>
         {(atrasadas > 0 || sinTecnico > 0) && (
           <>
