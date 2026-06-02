@@ -155,107 +155,109 @@ export default function StickerPage() {
               key={i}
               className="sticker-card"
               style={{
-                width: "264px",
-                height: "151px",
+                width: "280px",
                 border: `2px solid ${colors.border}`,
-                borderRadius: 6,
+                borderRadius: 8,
                 background: "white",
-                overflow: "hidden",
-                boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
+                boxShadow: "0 2px 10px rgba(0,0,0,0.13)",
                 display: "flex",
                 flexDirection: "column",
+                fontFamily: "Arial, Helvetica, sans-serif",
               }}
             >
-              {/* Sticker header */}
+              {/* Header */}
               <div style={{
                 background: "#0f2847",
-                padding: "4px 8px",
+                padding: "5px 10px",
+                borderRadius: "6px 6px 0 0",
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
               }}>
-                <div style={{ color: "white", fontWeight: 800, fontSize: 10, letterSpacing: "0.04em" }}>
+                <div style={{ color: "white", fontWeight: 800, fontSize: 10, letterSpacing: "0.05em" }}>
                   MSC · LAB. INSTRUMENTACIÓN
                 </div>
               </div>
 
-              {/* Sticker body */}
-              <div style={{ flex: 1, padding: "6px 10px", display: "flex", gap: 8 }}>
-                {/* Left: main info */}
-                <div style={{ flex: 1 }}>
+              {/* Body */}
+              <div style={{ padding: "8px 10px 6px", display: "flex", gap: 8 }}>
+                {/* Left */}
+                <div style={{ flex: 1, minWidth: 0 }}>
                   {/* TAG */}
-                  <div style={{ fontSize: 18, fontWeight: 800, color: "#0f2847", lineHeight: 1, marginBottom: 2 }}>
+                  <div style={{ fontSize: 20, fontWeight: 900, color: "#0f2847", lineHeight: 1, marginBottom: 3 }}>
                     {record.tag}
                   </div>
-                  <div style={{ fontSize: 9, color: "#64748b", marginBottom: 6, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {/* Descripción — truncada con ellipsis, no corta borde */}
+                  <div style={{ fontSize: 9, color: "#64748b", marginBottom: 7, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%" }}>
                     {record.descripcionInstrumento}
                   </div>
 
-                  {/* Cert number */}
-                  <div style={{ fontSize: 8, color: "#94a3b8" }}>Certificado</div>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: "#1e293b" }}>
+                  {/* Certificado */}
+                  <div style={{ fontSize: 7, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em" }}>Certificado N°</div>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: "#1e293b", marginBottom: 6, wordBreak: "break-all" }}>
                     {record.numeroCertificado}
                   </div>
 
-                  {/* Dates */}
-                  <div style={{ marginTop: 4, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
+                  {/* Fecha + Técnico */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 6px" }}>
                     <div>
-                      <div style={{ fontSize: 8, color: "#94a3b8" }}>Calibrado</div>
+                      <div style={{ fontSize: 7, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em" }}>Calibrado</div>
                       <div style={{ fontSize: 9, fontWeight: 600, color: "#1e293b" }}>{fmtDate(record.fecha)}</div>
                     </div>
-                    <div>
-                      <div style={{ fontSize: 8, color: "#94a3b8" }}>Técnico</div>
-                      <div style={{ fontSize: 8, color: "#1e293b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 7, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em" }}>Técnico</div>
+                      <div style={{ fontSize: 8, color: "#1e293b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {record.tecnicoNombre.split(" ").slice(0, 2).join(" ")}
                       </div>
                     </div>
                   </div>
                 </div>
 
-                {/* Right: result badge + QR real */}
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, minWidth: 64 }}>
+                {/* Right: badge + QR */}
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 5, width: 68, flexShrink: 0 }}>
                   <div style={{
                     background: colors.bg,
-                    border: `1px solid ${colors.border}`,
+                    border: `1.5px solid ${colors.border}`,
                     color: colors.text,
-                    fontWeight: 800,
-                    fontSize: 10,
-                    padding: "4px 8px",
+                    fontWeight: 900,
+                    fontSize: 9,
+                    padding: "3px 6px",
                     borderRadius: 4,
                     textAlign: "center" as const,
-                    letterSpacing: "0.04em",
+                    letterSpacing: "0.05em",
+                    width: "100%",
                   }}>
                     {record.resultadoGeneral}
                   </div>
-                  {/* QR real que apunta a la página pública del certificado */}
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={`/api/qr?url=${encodeURIComponent(`${typeof window !== "undefined" ? window.location.origin : "https://sync-msc-production.up.railway.app"}/pub/cal/${encodeURIComponent(record.numeroCertificado)}`)}&size=128`}
-                    alt="QR Certificado"
-                    width={56}
-                    height={56}
-                    style={{ borderRadius: 3, border: "1px solid #e2e8f0" }}
+                    alt="QR"
+                    width={60}
+                    height={60}
+                    style={{ borderRadius: 4, border: "1px solid #e2e8f0", display: "block" }}
                   />
-                  <div style={{ fontSize: 6, color: "#94a3b8", textAlign: "center" as const, lineHeight: 1.2 }}>
+                  <div style={{ fontSize: 6, color: "#94a3b8", textAlign: "center" as const, lineHeight: 1.3 }}>
                     Escanear<br />para verificar
                   </div>
                 </div>
               </div>
 
-              {/* Sticker footer */}
+              {/* Footer */}
               <div style={{
                 background: colors.bg,
-                padding: "2px 10px",
+                padding: "3px 10px",
                 borderTop: `1px solid ${colors.border}`,
+                borderRadius: "0 0 6px 6px",
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
               }}>
-                <div style={{ fontSize: 8, color: colors.text, fontWeight: 600 }}>
+                <div style={{ fontSize: 8, color: colors.text, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "70%" }}>
                   {record.tipoVariable} · Patrón: {record.patronCodigo}
                 </div>
-                <div style={{ fontSize: 8, color: colors.text }}>
-                  MSC · LAB. INST.
+                <div style={{ fontSize: 8, color: colors.text, flexShrink: 0 }}>
+                  MSC
                 </div>
               </div>
             </div>
@@ -268,13 +270,13 @@ export default function StickerPage() {
           #sticker-controls { display: none !important; }
           body { margin: 0; background: white; }
           #stickers-area {
-            padding: 8mm;
+            padding: 6mm;
             gap: 4mm !important;
             justify-content: flex-start !important;
           }
           .sticker-card {
-            width: 70mm !important;
-            height: 40mm !important;
+            width: 74mm !important;
+            box-shadow: none !important;
             break-inside: avoid;
             page-break-inside: avoid;
           }
