@@ -1279,7 +1279,7 @@ export default function RegistroOTPage() {
         for (const plan of planes) {
           // Cargar TODAS las OTs de la semana (todos los días)
           for (const ot of plan.otsProgramadas) {
-            if (user.rol === 4) {
+            if (user.rol === 4 || user.rol === 6) {
               if (!ot.personalAsignado.some(p => nombreCoincide(p, user.nombre))) continue;
             } else if (user.rol >= 3 && user.areas?.length > 0 && plan.areaCodigo) {
               if (!user.areas.includes(plan.areaCodigo)) continue;
