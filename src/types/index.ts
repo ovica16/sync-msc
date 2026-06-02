@@ -1,6 +1,6 @@
 // ─── Roles ────────────────────────────────────────────────────────────────────
-// 1 = Administrador  2 = Superintendente  3 = Supervisor  4 = Técnico  5 = Planificador
-export type Rol = 1 | 2 | 3 | 4 | 5;
+// 1 = Administrador  2 = Superintendente  3 = Supervisor  4 = Técnico  5 = Planificador  6 = Contratista
+export type Rol = 1 | 2 | 3 | 4 | 5 | 6;
 
 // ─── Disciplina ───────────────────────────────────────────────────────────────
 // GENERAL = acceso a módulos de OT (default)
