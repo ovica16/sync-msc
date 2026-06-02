@@ -1,10 +1,12 @@
 "use client";
 
+type BitacoraEntry = { turno: string; supervisor: string; nota: string; hhAtendidas: number; fecha?: string };
+
 type OTDisplay = {
   id: string; numeroOT: string; tag: string; tipoOT: string;
   descripcion: string; tecnicos: string[]; hhTotal: number;
   estado: string; critica: boolean; pendiente: boolean; nota: string;
-  esPlan?: boolean;
+  esPlan?: boolean; esGuardia?: boolean; bitacora?: BitacoraEntry[];
 };
 
 type Novedad = { prioridad: string; tag?: string; descripcion: string };
@@ -160,29 +162,56 @@ export default function PrintClientTecnico({
                 </td>
               </tr>
             )}
-            {otsPlan.map((ot, idx) => (
-              <tr key={ot.id} className="plan-row" style={{ background: ot.critica ? "#fff1f2" : "#f8fafc" }}>
-                <td style={{ textAlign: "center", fontSize: 8 }}>{idx + 1}</td>
-                <td style={{ textAlign: "center", fontSize: 8, fontWeight: "bold", color: TIPO_COLOR[ot.tipoOT] ?? "#000" }}>
-                  {ot.tipoOT || "—"}
-                  <div style={{ fontSize: 6, marginTop: 1 }}>
-                    <span className="plan-badge">PLAN</span>
-                  </div>
-                </td>
-                <td style={{ fontWeight: "bold", fontFamily: "monospace", fontSize: 8 }}>{ot.tag || "OPEPLANT"}</td>
-                <td style={{ textAlign: "center", fontSize: 8 }}>{ot.hhTotal || "—"}</td>
-                <td style={{ fontFamily: "monospace", fontSize: 8 }}>{ot.numeroOT}</td>
-                <td style={{ fontSize: 8 }}>{ot.descripcion || "—"}</td>
-                <td style={{ fontSize: 8, fontStyle: ot.nota ? "normal" : "italic", color: ot.nota ? "#1e293b" : "#94a3b8" }}>
-                  {ot.nota || "—"}
-                  {ot.critica   && <div style={{ fontSize: 7, color: "#dc2626", fontWeight: "bold" }}>⚠ CRÍTICA</div>}
-                  {ot.pendiente && <div style={{ fontSize: 7, color: "#d97706", fontWeight: "bold" }}>→ SGTE TURNO</div>}
-                </td>
-                <td style={{ textAlign: "center", fontSize: 7.5, fontWeight: "bold" }}>
-                  <span style={{ color: "#16a34a", background: "#dcfce7", padding: "2px 5px", borderRadius: 3 }}>PLAN</span>
-                </td>
-              </tr>
-            ))}
+            {otsPlan.map((ot, idx) => {
+              const entradas = ot.esGuardia && ot.bitacora && ot.bitacora.length > 0 ? ot.bitacora : null;
+              if (entradas) {
+                // OPEPLANT con bitácora: una fila por entrada
+                return entradas.map((b, bi) => (
+                  <tr key={`${ot.id}-b${bi}`} className="plan-row" style={{ background: "#fffbeb" }}>
+                    <td style={{ textAlign: "center", fontSize: 8 }}>{idx + 1}.{bi + 1}</td>
+                    <td style={{ textAlign: "center", fontSize: 8, fontWeight: "bold", color: TIPO_COLOR[ot.tipoOT] ?? "#d97706" }}>
+                      {ot.tipoOT || "PDM"}
+                      <div style={{ fontSize: 6, marginTop: 1 }}><span className="opeplant-badge">OPEPLANT</span></div>
+                    </td>
+                    <td style={{ fontWeight: "bold", fontFamily: "monospace", fontSize: 8 }}>OPEPLANT</td>
+                    <td style={{ textAlign: "center", fontSize: 8 }}>{b.hhAtendidas || "—"}</td>
+                    <td style={{ fontFamily: "monospace", fontSize: 8 }}>{ot.numeroOT}</td>
+                    <td style={{ fontSize: 8 }}>{b.nota || ot.descripcion || "—"}</td>
+                    <td style={{ fontSize: 8, color: "#92400e" }}>
+                      {b.supervisor && <span>{b.supervisor}</span>}
+                      {b.turno && <span style={{ color: "#64748b" }}> · {b.turno}</span>}
+                    </td>
+                    <td style={{ textAlign: "center", fontSize: 7.5, fontWeight: "bold" }}>
+                      <span style={{ color: "#92400e", background: "#fef3c7", padding: "2px 5px", borderRadius: 3 }}>EJECUTADA</span>
+                    </td>
+                  </tr>
+                ));
+              }
+              // OT de plan normal o OPEPLANT sin bitácora
+              return (
+                <tr key={ot.id} className="plan-row" style={{ background: ot.critica ? "#fff1f2" : ot.esGuardia ? "#fffbeb" : "#f8fafc" }}>
+                  <td style={{ textAlign: "center", fontSize: 8 }}>{idx + 1}</td>
+                  <td style={{ textAlign: "center", fontSize: 8, fontWeight: "bold", color: TIPO_COLOR[ot.tipoOT] ?? "#000" }}>
+                    {ot.tipoOT || "—"}
+                    <div style={{ fontSize: 6, marginTop: 1 }}>
+                      <span className={ot.esGuardia ? "opeplant-badge" : "plan-badge"}>{ot.esGuardia ? "OPEPLANT" : "PLAN"}</span>
+                    </div>
+                  </td>
+                  <td style={{ fontWeight: "bold", fontFamily: "monospace", fontSize: 8 }}>{ot.tag || "OPEPLANT"}</td>
+                  <td style={{ textAlign: "center", fontSize: 8 }}>{ot.hhTotal || "—"}</td>
+                  <td style={{ fontFamily: "monospace", fontSize: 8 }}>{ot.numeroOT}</td>
+                  <td style={{ fontSize: 8 }}>{ot.descripcion || "—"}</td>
+                  <td style={{ fontSize: 8, fontStyle: ot.nota ? "normal" : "italic", color: ot.nota ? "#1e293b" : "#94a3b8" }}>
+                    {ot.nota || "—"}
+                    {ot.critica   && <div style={{ fontSize: 7, color: "#dc2626", fontWeight: "bold" }}>⚠ CRÍTICA</div>}
+                    {ot.pendiente && <div style={{ fontSize: 7, color: "#d97706", fontWeight: "bold" }}>→ SGTE TURNO</div>}
+                  </td>
+                  <td style={{ textAlign: "center", fontSize: 7.5, fontWeight: "bold" }}>
+                    <span style={{ color: "#16a34a", background: "#dcfce7", padding: "2px 5px", borderRadius: 3 }}>PLAN</span>
+                  </td>
+                </tr>
+              );
+            })}
 
             {/* OTs registradas (CMR/CMP del sistema) */}
             {otsRegistradas.length > 0 && (

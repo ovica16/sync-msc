@@ -11,10 +11,13 @@ type OTDisplay = {
   esPlan?: boolean; // OT del plan semanal (no registrada en sistema)
 };
 
+type BitacoraEntry = { turno: string; supervisor: string; nota: string; hhAtendidas: number; fecha?: string };
+
 type OTPlanRaw = {
   otId?: string; numeroOT: string; tag?: string;
   tipoOT?: string; descripcion?: string; tecnicos?: string[];
   hhTotal?: number; estado?: string; esGuardia?: boolean;
+  bitacora?: BitacoraEntry[];
   disciplina?: string;
 };
 
@@ -69,6 +72,8 @@ export default async function ImprimirReporteTecnicoPage({ params }: Params) {
     pendiente: pendientes.has(o.otId ?? ""),
     nota: notasMap.get(o.otId ?? "") ?? "",
     esPlan: true,
+    esGuardia: o.esGuardia ?? false,
+    bitacora: o.bitacora ?? [],
   }));
 
   // Todas las OTs: plan primero, luego registradas
