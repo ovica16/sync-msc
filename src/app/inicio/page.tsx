@@ -89,7 +89,7 @@ export default function InicioPage() {
       }}>
         <div style={{ textAlign: "center", marginBottom: 16 }}>
           <h1 style={{ fontSize: 24, fontWeight: 800, color: "#0f2847" }}>
-            Bienvenido, {user.nombre.split(" ")[0]}
+            Bienvenido, {user.nombre.split(" ").at(-1)}
           </h1>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 6 }}>
             <span style={{
