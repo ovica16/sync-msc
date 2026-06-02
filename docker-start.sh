@@ -41,11 +41,11 @@ const migraciones = [
     console.log('[migrate] Reset huérfanas skip:', e.message.slice(0, 80));
   }
 
-  // Asegurar contador 2026 >= 277 (no bajar si ya fue incrementado por nuevos certs)
+  // Asegurar contador 2026 >= 286 (9 certs reales subidos, próximo = 287)
   try {
     await pool.query(
-      `INSERT INTO "Contador" (nombre, valor) VALUES ('calibracion-2026', 277)
-       ON CONFLICT (nombre) DO UPDATE SET valor = GREATEST("Contador".valor, 277)`
+      `INSERT INTO "Contador" (nombre, valor) VALUES ('calibracion-2026', 286)
+       ON CONFLICT (nombre) DO UPDATE SET valor = GREATEST("Contador".valor, 286)`
     );
     console.log('[migrate] Contador calibracion-2026 OK.');
   } catch(e) {
