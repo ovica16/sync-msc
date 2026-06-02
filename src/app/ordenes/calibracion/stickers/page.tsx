@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 
@@ -110,7 +110,7 @@ function Sticker({ r, copies }: { r: CalibRecord; copies: number }) {
   );
 }
 
-export default function MultiStickerPage() {
+function MultiStickerContent() {
   const searchParams = useSearchParams();
   const ids = (searchParams.get("ids") ?? "").split(",").filter(Boolean);
 
@@ -205,5 +205,13 @@ export default function MultiStickerPage() {
         @page { margin: 6mm; size: A4; }
       `}</style>
     </>
+  );
+}
+
+export default function MultiStickerPage() {
+  return (
+    <Suspense fallback={<div style={{ padding: 40, textAlign: "center", color: "#64748b" }}>Cargando...</div>}>
+      <MultiStickerContent />
+    </Suspense>
   );
 }
