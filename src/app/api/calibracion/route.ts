@@ -1,20 +1,23 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest } from "next/server";
 
-// Formato nuevo: {seq}_{TAG}_{YYYYMMDD}
-// La secuencia se reinicia cada año. Para 2026 el contador arranca en 277
-// (inicializado en docker-start.sh) para que el próximo sea 278.
+// Formato: {seq}_{TAG}_{YYMMDD}
+// El número secuencial se deriva del máximo real en la BD — nunca de un contador externo.
+// Esto garantiza que ningún deploy, reinicio o desincronización pueda generar números incorrectos.
+const BASE_2026 = 277; // todos los certs de 2026 deben ser > 277
+
 async function siguienteCertificado(tag: string, fecha: string): Promise<string> {
-  const year = new Date(fecha + "T12:00:00").getFullYear();
-  const dateStr = fecha.slice(2, 10).replace(/-/g, ""); // 260601 (YYMMDD)
-  // TAG limpio: mantener alfanuméricos y guiones, sin barras ni espacios
+  const dateStr = fecha.slice(2, 10).replace(/-/g, ""); // YYMMDD
   const tagLimpio = tag.replace(/[/\\*?:"<>| ]/g, "").toUpperCase();
-  const counter = await prisma.contador.upsert({
-    where: { nombre: `calibracion-${year}` },
-    update: { valor: { increment: 1 } },
-    create: { nombre: `calibracion-${year}`, valor: 1 },
-  });
-  return `${counter.valor}_${tagLimpio}_${dateStr}`;
+
+  // Calcular el siguiente número desde el máximo real existente en la BD
+  const todos = await prisma.registroCalibracion.findMany({ select: { numeroCertificado: true } });
+  const maxUsado = todos.reduce((max, r) => {
+    const n = parseInt(r.numeroCertificado.split("_")[0], 10);
+    return !isNaN(n) && n > max ? n : max;
+  }, BASE_2026);
+
+  return `${maxUsado + 1}_${tagLimpio}_${dateStr}`;
 }
 
 export async function GET(req: NextRequest) {
