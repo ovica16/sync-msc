@@ -575,6 +575,23 @@ export default function CalibracionPage() {
   const [detalle, setDetalle] = useState<RegistroDoc | null>(null);
   const [patchingSticker, setPatchingSticker] = useState(false);
 
+  // Selección múltiple para stickers
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const toggleSelect = (id: string) => setSelectedIds(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+  const selectHoy = () => {
+    const hoy = new Date().toISOString().slice(0, 10);
+    const ids = filteredRegistros.filter(r => r.fecha.slice(0, 10) === hoy).map(r => r._id);
+    setSelectedIds(new Set(ids));
+  };
+  const imprimirSeleccionados = () => {
+    if (selectedIds.size === 0) return;
+    window.open(`/ordenes/calibracion/stickers?ids=${[...selectedIds].join(",")}`, "_blank");
+  };
+
   // Datos remotos
   const [patrones, setPatrones] = useState<PatronDoc[]>([]);
   const [tecnicos, setTecnicos] = useState<UserOpt[]>([]);
@@ -1023,6 +1040,22 @@ export default function CalibracionPage() {
                   >
                     📊 Dashboard
                   </a>
+                  <button style={S.btnOutline} onClick={selectHoy}>
+                    🗓 Stickers de hoy
+                  </button>
+                  {selectedIds.size > 0 && (
+                    <>
+                      <button style={S.btnOutline} onClick={() => setSelectedIds(new Set())}>
+                        ✕ Limpiar ({selectedIds.size})
+                      </button>
+                      <button
+                        style={{ ...S.btnPrimary, background: "#0891b2" }}
+                        onClick={imprimirSeleccionados}
+                      >
+                        🖨 Imprimir stickers ({selectedIds.size})
+                      </button>
+                    </>
+                  )}
                   <button
                     style={S.btnOutline}
                     onClick={() => {
@@ -1087,10 +1120,18 @@ export default function CalibracionPage() {
               filteredRegistros.map((r) => (
                 <div
                   key={r._id}
-                  style={{ ...S.card, cursor: "pointer" }}
+                  style={{ ...S.card, cursor: "pointer", outline: selectedIds.has(r._id) ? "2px solid #0891b2" : "none" }}
                   onClick={() => openDetalle(r)}
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, flexWrap: "wrap" }}>
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(r._id)}
+                        onChange={() => toggleSelect(r._id)}
+                        onClick={(e) => e.stopPropagation()}
+                        style={{ marginTop: 3, width: 16, height: 16, accentColor: "#0891b2", cursor: "pointer", flexShrink: 0 }}
+                      />
                     <div>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
                         <span style={{ fontWeight: 700, fontSize: 13, color: "#0f2847" }}>
@@ -1141,6 +1182,7 @@ export default function CalibracionPage() {
                           </button>
                         </div>
                       )}
+                    </div>
                     </div>
                     <div style={{ textAlign: "right", flexShrink: 0 }}>
                       <div style={{ fontSize: 12, color: "#64748b" }}>{fmtDate(r.fecha)}</div>
