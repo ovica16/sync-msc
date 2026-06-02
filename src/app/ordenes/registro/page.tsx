@@ -146,10 +146,13 @@ function normalizar(s: string): string {
 function nombreCoincide(planNombre: string, userNombre: string): boolean {
   const tokA = new Set(normalizar(planNombre).split(/\s+/).filter(t => t.length > 2));
   const tokB = new Set(normalizar(userNombre).split(/\s+/).filter(t => t.length > 2));
-  let comunes = 0;
-  for (const t of tokA) { if (tokB.has(t)) comunes++; }
-  // Si el nombre del plan tiene solo 1 token basta 1 coincidencia; si tiene ≥2, se exigen ≥2
-  return tokA.size === 1 ? comunes >= 1 : comunes >= 2;
+  // Todos los tokens del nombre más corto deben aparecer en el más largo.
+  // Ej: "Cordova Felix" ⊂ "Cordova Ramos Felix" → coincide ✓
+  //     "James Quispe" vs "Quispe Valda José" → "james" no está → no coincide ✓
+  const [menor, mayor] = tokA.size <= tokB.size ? [tokA, tokB] : [tokB, tokA];
+  if (menor.size === 0) return false;
+  for (const t of menor) { if (!mayor.has(t)) return false; }
+  return true;
 }
 
 function getWeekNumber(d: Date) {
