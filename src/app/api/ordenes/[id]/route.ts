@@ -69,6 +69,11 @@ function mapEstadoAlPlan(estado: string): string {
   }
 }
 
+const DIA_ABREV: Record<number, string> = { 1: "Lu", 2: "Ma", 3: "Mi", 4: "Ju", 5: "Vi", 6: "Sa", 0: "Do" };
+function fechaToDiaAbrev(fecha: string): string {
+  return DIA_ABREV[new Date(fecha + "T12:00:00").getDay()] ?? "";
+}
+
 export async function GET(_req: NextRequest, { params }: Ctx) {
   const { id } = await params;
   const ot = await prisma.ordenTrabajo.findUnique({ where: { id }, include });
@@ -133,7 +138,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
       });
     }
 
-    // Agregar avance diario
+    // Agregar avance diario y marcar ese día en el plan como completada
     if (registroDiario) {
       await prisma.otRegistroDiario.create({
         data: {
@@ -146,6 +151,14 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
           observaciones: registroDiario.observaciones ?? null,
         },
       });
+      // Marcar solo el día trabajado como completada en el plan
+      const diaAvance = fechaToDiaAbrev(registroDiario.fecha);
+      if (diaAvance) {
+        await prisma.otProgramada.updateMany({
+          where: { ordenTrabajoId: id, dia: diaAvance },
+          data: { estado: "completada" },
+        });
+      }
     }
 
     // Historial
@@ -168,24 +181,38 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
       include,
     });
 
-    // Propagar al plan semanal — dos vías para cubrir casos con campos de vinculación incompletos
+    // Propagar al plan semanal
     if (estado) {
       const estadoPlan = mapEstadoAlPlan(estado);
-      // Vía 1: por ordenTrabajoId (siempre disponible si la OtProgramada fue vinculada)
-      await prisma.otProgramada.updateMany({
-        where: { ordenTrabajoId: ot.id },
-        data: { estado: estadoPlan },
-      });
-      // Vía 2: por programacionSemanalId + numeroOT (para OTs recurrentes multi-día)
-      if (ot.origenPlan && ot.programacionSemanalId && ot.otJdeNumero) {
+      // Contar cuántos días del plan están vinculados a esta OT
+      const diasVinculados = await prisma.otProgramada.count({ where: { ordenTrabajoId: ot.id } });
+      const esRecurrente = diasVinculados > 1;
+
+      if (esRecurrente) {
+        // OT recurrente: solo actualiza el día de inicio; los otros días se marcan vía avance diario
+        if (ot.otJdeDia) {
+          await prisma.otProgramada.updateMany({
+            where: { ordenTrabajoId: ot.id, dia: ot.otJdeDia },
+            data: { estado: estadoPlan },
+          });
+        }
+      } else {
+        // OT normal: actualiza todos los registros vinculados (suele ser solo uno)
         await prisma.otProgramada.updateMany({
-          where: {
-            programacionSemanalId: ot.programacionSemanalId,
-            numeroOT: ot.otJdeNumero,
-            ...(ot.otJdeDia ? { dia: ot.otJdeDia } : {}),
-          },
+          where: { ordenTrabajoId: ot.id },
           data: { estado: estadoPlan },
         });
+        // Fallback por programacionSemanalId si falta el vínculo directo
+        if (ot.origenPlan && ot.programacionSemanalId && ot.otJdeNumero) {
+          await prisma.otProgramada.updateMany({
+            where: {
+              programacionSemanalId: ot.programacionSemanalId,
+              numeroOT: ot.otJdeNumero,
+              dia: ot.otJdeDia ?? undefined,
+            },
+            data: { estado: estadoPlan },
+          });
+        }
       }
     }
 
