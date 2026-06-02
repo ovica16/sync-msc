@@ -1,36 +1,39 @@
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { jwtVerify } from "jose";
 
-export function proxy(request: NextRequest) {
-  const token = request.cookies.get("sync_session")?.value;
-  const { pathname } = request.nextUrl;
+const JWT_SECRET = process.env.JWT_SECRET || "sync-msc-secret-dev-2025";
+const COOKIE_NAME = "sync_session";
 
-  // Si no está autenticado y quiere entrar a rutas protegidas
-  if (!token && (pathname.startsWith("/inicio") || pathname.startsWith("/ordenes"))) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    return NextResponse.redirect(url);
+// Rutas que no requieren autenticación
+const PUBLIC_PATHS = [
+  "/api/auth/login",
+  "/api/auth/logout",
+  "/api/health",
+];
+
+export async function proxy(req: NextRequest) {
+  const { pathname } = req.nextUrl;
+
+  // Solo proteger rutas /api/*
+  if (!pathname.startsWith("/api/")) return NextResponse.next();
+
+  // Permitir rutas públicas
+  if (PUBLIC_PATHS.some(p => pathname.startsWith(p))) return NextResponse.next();
+
+  const token = req.cookies.get(COOKIE_NAME)?.value;
+  if (!token) {
+    return NextResponse.json({ ok: false, error: "No autenticado" }, { status: 401 });
   }
 
-  // Si ya está autenticado y quiere ir a la página de login, lo redirigimos a órdenes
-  if (token && pathname === "/login") {
-    const url = request.nextUrl.clone();
-    url.pathname = "/ordenes";
-    return NextResponse.redirect(url);
+  try {
+    const secret = new TextEncoder().encode(JWT_SECRET);
+    await jwtVerify(token, secret);
+    return NextResponse.next();
+  } catch {
+    return NextResponse.json({ ok: false, error: "Sesión inválida o expirada" }, { status: 401 });
   }
-
-  return NextResponse.next();
 }
 
 export const config = {
-  matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - api (API routes)
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     */
-    "/((?!api|_next/static|_next/image|favicon.ico).*)",
-  ],
+  matcher: "/api/:path*",
 };
