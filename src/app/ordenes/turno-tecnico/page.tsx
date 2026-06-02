@@ -322,7 +322,13 @@ export default function ReporteTurnoTecnicoPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Error al guardar");
-      window.open(`/ordenes/turno-tecnico/${data.reporte._id}/imprimir`, "_blank");
+      const url = `/ordenes/turno-tecnico/${data.reporte._id}/imprimir`;
+      // Abrir en nueva pestaña — usar link temporal para evitar bloqueo de popups
+      const a = document.createElement("a");
+      a.href = url; a.target = "_blank"; a.rel = "noopener noreferrer";
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setSubmitting(false);
+      setView("lista");
     } catch (e: unknown) {
       setSubmitErr(e instanceof Error ? e.message : "Error desconocido");
       setSubmitting(false);
