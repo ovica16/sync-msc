@@ -256,7 +256,9 @@ function Dashboard({
         <div style={{ display: "flex", gap: 6, minWidth: "max-content" }}>
           {DIAS.map((dia) => {
             const otsDia = ots.filter((o) => o.dia === dia);
-            const hecho  = otsDia.filter((o) => o.estado === "completada").length;
+            const concluidas = otsDia.filter((o) => o.estado === "completada").length;
+            const iniciadas  = otsDia.filter((o) => ["completada", "en_proceso", "en_revision"].includes(o.estado)).length;
+            const hecho  = concluidas;
             const tot    = otsDia.length;
             const p      = pct(hecho, tot);
             const hhDia  = otsDia.reduce((s, o) => s + (o.hhTotal ?? 0), 0);
@@ -271,6 +273,9 @@ function Dashboard({
                 <span style={{ fontSize: 9, color: "#cbd5e1", marginTop: 1 }}>{fmtFecha(fechasDias[dia])}</span>
                 <span style={{ fontSize: 15, fontWeight: 800, color: "#1e293b", marginTop: 3 }}>{hecho}/{tot}</span>
                 <span style={{ fontSize: 11, fontWeight: 700, color, marginTop: 1 }}>{tot > 0 ? `${p}%` : "—"}</span>
+                {iniciadas > hecho && (
+                  <span style={{ fontSize: 9, color: "#2563eb", marginTop: 1 }}>{iniciadas - hecho} en curso</span>
+                )}
                 {hhDia > 0 && <span style={{ fontSize: 9, color: "#94a3b8", marginTop: 2 }}>{hhDia}HH</span>}
               </div>
             );
@@ -1264,7 +1269,9 @@ export default function SemanalesPage() {
           : data.filter((a) => user.areas.includes(a.codigo));
         if (visible.length === 0) return;
         setAreas(visible);
-        const defaultArea = visible.find((a) => a.codigo === "3320") ?? visible[0];
+        // Priorizar el área del usuario; si no está en la lista, tomar la primera disponible
+        const userPrimaryArea = user.areas?.[0];
+        const defaultArea = visible.find((a) => a.codigo === userPrimaryArea) ?? visible[0];
         setAreaActiva(defaultArea);
       })
       .catch(() => {});
