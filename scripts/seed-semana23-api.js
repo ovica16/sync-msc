@@ -1,35 +1,24 @@
-// node scripts/seed-semana23.js
-// Sube semana 23 de PSElt2026.xlsx (ELEC/3319) y PSInst2026.xlsx (INST/3320)
-// Usa Prisma + PostgreSQL directo
+// node scripts/seed-semana23-api.js
+// Sube semana 23 via API HTTP (no requiere DB local)
+// Uso: APP_URL=https://tu-app.railway.app node scripts/seed-semana23-api.js
 
-const XLSX  = require("xlsx");
-const path  = require("path");
-require("dotenv").config({ path: path.join(__dirname, "../.env.local") });
-const { PrismaClient } = require("@prisma/client");
-const { PrismaPg }     = require("@prisma/adapter-pg");
+const XLSX = require("xlsx");
+const path = require("path");
 
-const url    = process.env.DATABASE_URL;
-if (!url) { console.error("DATABASE_URL no configurada"); process.exit(1); }
-const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: url }) });
-
-const ANIO   = 2026;
-const SEMANA = 23;
+const APP_URL = process.env.APP_URL || "https://syncmsc-production.up.railway.app";
+const ANIO    = 2026;
+const SEMANA  = 23;
 
 const ARCHIVOS = [
-  { archivo: "PSElt2026.xlsx",  disciplina: "ELEC", areaCodigo: "3319", sheetPrefix: "E" },
-  { archivo: "PSInst2026.xlsx", disciplina: "INST", areaCodigo: "3320", sheetPrefix: "I" },
-  { archivo: "PSTesa2026.xlsx", disciplina: "GENERAL", areaCodigo: "3348", sheetPrefix: "T" },
-  { archivo: "PSVE2026.xlsx",   disciplina: "GENERAL", areaCodigo: "3351", sheetPrefix: "E" },
+  { archivo: "PSTesa2026.xlsx", disciplina: "TESA",   areaCodigo: "3348", sheetPrefix: "T" },
+  { archivo: "PSVE2026.xlsx",   disciplina: "TELECO", areaCodigo: "3351", sheetPrefix: "E" },
 ];
 
 const DIAS_VALIDOS = ["Lu", "Ma", "Mi", "Ju", "Vi", "Sa", "Do"];
-
-const GRUPO_MAP = {
+const GRUPO_MAP    = {
   "Grupo 1": "G1", "Grupo 2": "G2", "Grupo 3": "G3", "Grupo 4": "G4",
   "Diurno": "Diurno", "Nocturno": "Nocturno",
 };
-
-const ASIST_MAP = { T: "T", N: "N", D: "D", V: "V", CS: "CS", BM: "BM", LG: "LG", FI: "FI", DO: "DO", IF: "IF" };
 
 function getMondayOfWeek(anio, semana) {
   const jan4 = new Date(Date.UTC(anio, 0, 4));
@@ -45,7 +34,7 @@ function normalizarPersonal(str) {
   if (!str || typeof str !== "string") return [];
   return str.split(/[/+]/).map(s => s.trim()).filter(Boolean).map(nombre => {
     const lower = nombre.toLowerCase();
-    if (lower.includes("contract") || lower.includes("contrat") || lower.includes("apoyo contrat") || lower.includes("practicante")) {
+    if (lower.includes("contract") || lower.includes("contrat") || lower.includes("practicante")) {
       if (!contratistaMap.has(lower)) { contratistaCnt++; contratistaMap.set(lower, `Contratista ${contratistaCnt}`); }
       return contratistaMap.get(lower);
     }
@@ -53,9 +42,10 @@ function normalizarPersonal(str) {
   });
 }
 
-function parseSheet(data, semanaNum, anio, disciplina) {
+function parseSheet(data) {
   const ots = [];
   const personalMap = new Map();
+  const ASIST_MAP = { T:"T", N:"N", D:"D", V:"V", CS:"CS", BM:"BM", LG:"LG", FI:"FI", DO:"DO", IF:"IF" };
 
   for (const row of data) {
     const noOT   = row[0];
@@ -114,83 +104,63 @@ async function upsert({ archivo, disciplina, areaCodigo, sheetPrefix }) {
   const sheet    = `${sheetPrefix}-${String(SEMANA).padStart(2, "0")}`;
 
   if (!wb.Sheets[sheet]) {
-    console.log(`⚠️  ${archivo}: hoja ${sheet} no encontrada`);
+    console.log(`⚠️  ${archivo}: hoja "${sheet}" no encontrada. Hojas disponibles: ${wb.SheetNames.join(", ")}`);
     return;
   }
 
   const data = XLSX.utils.sheet_to_json(wb.Sheets[sheet], { header: 1, defval: "" });
-  const { ots, personal } = parseSheet(data, SEMANA, ANIO, disciplina);
+  const { ots, personal } = parseSheet(data);
 
   const lunes   = getMondayOfWeek(ANIO, SEMANA);
   const domingo = new Date(lunes);
   domingo.setUTCDate(lunes.getUTCDate() + 6);
 
-  const hhProgramadas = ots.reduce((s, o) => s + o.hhTotal, 0);
-  const hhReactivo    = ots.filter(o => ["C","CMP","CMR"].includes(o.tipoOT)).reduce((s, o) => s + o.hhTotal, 0);
-
-  // Calcular HH disponibles: técnicos con asistencia T por día × 10h
-  const hhDisponibles = personal.reduce((sum, p) => {
+  const hhProgramadas  = ots.reduce((s, o) => s + o.hhTotal, 0);
+  const hhReactivo     = ots.filter(o => ["C","CMP","CMR"].includes(o.tipoOT)).reduce((s, o) => s + o.hhTotal, 0);
+  const hhDisponibles  = personal.reduce((sum, p) => {
     const diasT = p.asistencia.filter(a => a.estado === "T").length;
     return sum + diasT * 10;
   }, 0);
 
-
-  const existing = await prisma.programacionSemanal.findFirst({
-    where: { semana: SEMANA, anio: ANIO, disciplina },
-  });
-
-  const baseData = {
-    semana:              SEMANA,
-    anio:                ANIO,
-    disciplina,
-    areaCodigo,
-    fechaInicio:         lunes,
-    fechaFin:            domingo,
+  const body = {
+    semana: SEMANA, anio: ANIO, disciplina, areaCodigo,
+    fechaInicio:         lunes.toISOString(),
+    fechaFin:            domingo.toISOString(),
     hhDisponiblesSemana: hhDisponibles,
     hhProgramadasSemana: hhProgramadas,
     hhReactivoSemana:    hhReactivo,
     estado:              "publicado",
     subidoPor:           "seed-excel",
+    otsProgramadas:      ots,
+    personal,
   };
 
-  if (existing) {
-    // Borrar OTs y personal anteriores (ResumenDia en cascade)
-    await prisma.otProgramada.deleteMany({ where: { programacionSemanalId: existing.id } });
-    await prisma.personalSemanal.deleteMany({ where: { programacionSemanalId: existing.id } });
-    await prisma.resumenDia.deleteMany({ where: { programacionSemanalId: existing.id } });
-    await prisma.programacionSemanal.update({
-      where: { id: existing.id },
-      data: {
-        ...baseData,
-        otsProgramadas: { create: ots },
-        personal:       { create: personal.map(p => ({ ...p, asistencia: p.asistencia })) },
-      },
-    });
-    console.log(`✏️  ${disciplina} S${SEMANA} actualizada | ${ots.length} OTs | ${personal.length} técnicos`);
+  console.log(`📤 ${disciplina} (${areaCodigo}) S${SEMANA}: ${ots.length} OTs, ${personal.length} técnicos`);
+
+  const res  = await fetch(`${APP_URL}/api/programacion-semanal`, {
+    method:  "POST",
+    headers: { "Content-Type": "application/json" },
+    body:    JSON.stringify(body),
+  });
+  const json = await res.json();
+
+  if (json.ok) {
+    console.log(`✅ OK — ${disciplina} S${SEMANA} subida`);
   } else {
-    await prisma.programacionSemanal.create({
-      data: {
-        ...baseData,
-        otsProgramadas: { create: ots },
-        personal:       { create: personal.map(p => ({ ...p, asistencia: p.asistencia })) },
-      },
-    });
-    console.log(`✅ ${disciplina} S${SEMANA} creada    | ${ots.length} OTs | ${personal.length} técnicos`);
+    console.log(`❌ Error — ${json.error}`);
   }
 }
 
 async function main() {
-  console.log(`\n📅 Subiendo semana ${SEMANA} de ${ANIO}...\n`);
+  console.log(`\n📅 Semana ${SEMANA} / ${ANIO} → ${APP_URL}\n`);
   for (const cfg of ARCHIVOS) {
     await upsert(cfg);
   }
   if (contratistaMap.size > 0) {
-    console.log("\n📋 Contratistas normalizados:");
+    console.log("\n📋 Contratistas:");
     for (const [k, v] of contratistaMap) console.log(`   "${k}" → "${v}"`);
   }
   console.log("\n🎉 Listo");
 }
 
-main()
-  .catch(e => { console.error(e); process.exit(1); })
-  .finally(() => prisma.$disconnect());
+main().catch(e => { console.error(e); process.exit(1); });

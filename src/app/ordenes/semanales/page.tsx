@@ -25,6 +25,8 @@ const GRUPOS: GrupoTrabajo[] = ["G1", "G2", "G3", "G4", "Diurno", "Nocturno"];
 function areaToDisciplina(areaCodigo: string): string {
   if (areaCodigo === "3320") return "INST";
   if (areaCodigo === "3319") return "ELEC";
+  if (areaCodigo === "3348") return "TESA";
+  if (areaCodigo === "3351") return "TELECO";
   return "MEC";
 }
 
