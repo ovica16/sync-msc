@@ -51,12 +51,11 @@ export default function PrintClientTecnico({
         @page { size: A4 landscape; margin: 10mm; }
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Calibri', 'Segoe UI', Arial, sans-serif; }
         body { background: white; color: #000; font-size: 9pt; }
-        .no-print { display: none !important; }
         @media screen {
           body { padding: 20px; background: #f0f0f0; }
           .pagina { background: white; width: 277mm; margin: 0 auto 20px; padding: 10mm; box-shadow: 0 2px 12px rgba(0,0,0,0.15); }
         }
-        @media print { .pagina { page-break-after: always; } .pagina:last-child { page-break-after: avoid; } }
+        @media print { .no-print { display: none !important; } .pagina { page-break-after: always; } .pagina:last-child { page-break-after: avoid; } }
         table { width: 100%; border-collapse: collapse; }
         th, td { border: 1px solid #000; padding: 3px 5px; vertical-align: middle; }
         th { background: #1f3864; color: white; font-weight: bold; text-align: center; font-size: 8pt; }
