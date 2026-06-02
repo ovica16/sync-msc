@@ -1577,7 +1577,7 @@ export default function SemanalesPage() {
                 fechasDias={fechasDias} programa={programa}
                 filtros={{ tecnico: filtroTecnico, estado: filtroEstado, turno: filtroTurno, busqueda }}
                 programaId={programaId} onEstadoChange={handleEstadoChange}
-                isAdmin={user?.rol === 1}
+                isAdmin={user?.rol === 1 || user?.rol === 3}
                 areaCodigo={areaActiva?.codigo}
                 onPersonalChange={handlePersonalChange}
               />
