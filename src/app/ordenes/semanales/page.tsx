@@ -222,6 +222,15 @@ function Dashboard({
 }) {
   const ESTADOS_ACTIVOS: EstadoOTProgramada[] = ["en_proceso", "en_revision", "completada"];
 
+  // Solo contar HH de días que ya ocurrieron (fecha UTC <= hoy local)
+  const hoy = new Date();
+  const hoyStr = `${hoy.getFullYear()}-${String(hoy.getMonth()+1).padStart(2,"0")}-${String(hoy.getDate()).padStart(2,"0")}`;
+  function diaPasado(dia: DiaSemana) {
+    const f = fechasDias[dia];
+    const fStr = f.toISOString().slice(0, 10);
+    return fStr <= hoyStr;
+  }
+
   const ots = programa.otsProgramadas ?? [];
   const total       = ots.length;
   const completadas = ots.filter((o) => o.estado === "completada").length;
@@ -230,11 +239,10 @@ function Dashboard({
   const atrasadas   = ots.filter((o) => o.estado === "atrasada").length;
   const bloqueadas  = ots.filter((o) => o.estado === "bloqueada").length;
   const hhProg      = programa.hhProgramadasSemana ?? 0;
-  // HH ejecutadas = todas las OTs activas (en_proceso + en_revision + completada)
-  const hhEjec      = ots.filter((o) => ESTADOS_ACTIVOS.includes(o.estado)).reduce((s, o) => s + (o.hhTotal ?? 0), 0);
-  // Progreso principal basado en HH, no en OTs completadas
+  // HH ejecutadas: solo días ya transcurridos
+  const hhEjec      = ots.filter((o) => ESTADOS_ACTIVOS.includes(o.estado) && diaPasado(o.dia as DiaSemana))
+                         .reduce((s, o) => s + (o.hhTotal ?? 0), 0);
   const progreso    = pct(hhEjec, hhProg);
-  const eficiencia  = progreso;
   const sinTecnico  = ots.filter((o) => !o.personalAsignado?.length).length;
   const barColor    = progreso >= 80 ? "#16a34a" : progreso >= 50 ? "#2563eb" : "#ea580c";
 
@@ -261,22 +269,31 @@ function Dashboard({
           {DIAS.map((dia) => {
             const otsDia    = ots.filter((o) => o.dia === dia);
             const hhDia     = otsDia.reduce((s, o) => s + (o.hhTotal ?? 0), 0);
-            const hhEjecDia = otsDia.filter((o) => ESTADOS_ACTIVOS.includes(o.estado)).reduce((s, o) => s + (o.hhTotal ?? 0), 0);
+            const esPasado  = diaPasado(dia);
+            const hhEjecDia = esPasado
+              ? otsDia.filter((o) => ESTADOS_ACTIVOS.includes(o.estado)).reduce((s, o) => s + (o.hhTotal ?? 0), 0)
+              : 0;
             const concluidas = otsDia.filter((o) => o.estado === "completada").length;
             const tot        = otsDia.length;
             const p          = pct(hhEjecDia, hhDia);
-            const color      = p === 100 ? "#16a34a" : p >= 70 ? "#2563eb" : p > 0 ? "#ea580c" : "#94a3b8";
+            const color      = !esPasado ? "#cbd5e1" : p === 100 ? "#16a34a" : p >= 70 ? "#2563eb" : p > 0 ? "#ea580c" : "#94a3b8";
             return (
               <div key={dia} style={{
                 display: "flex", flexDirection: "column", alignItems: "center",
-                background: "#f8fafc", borderRadius: 10, padding: "8px 12px",
-                minWidth: 72, border: "1px solid #e2e8f0",
+                background: esPasado ? "#f8fafc" : "#fafafa",
+                borderRadius: 10, padding: "8px 12px",
+                minWidth: 72, border: `1px solid ${esPasado ? "#e2e8f0" : "#f1f5f9"}`,
+                opacity: esPasado ? 1 : 0.5,
               }}>
                 <span style={{ fontSize: 9, fontWeight: 800, color: "#94a3b8", letterSpacing: "0.07em" }}>{DIAS_CORTO[dia]}</span>
                 <span style={{ fontSize: 9, color: "#cbd5e1", marginTop: 1 }}>{fmtFecha(fechasDias[dia])}</span>
-                <span style={{ fontSize: 17, fontWeight: 900, color, marginTop: 3 }}>{tot > 0 ? `${p}%` : "—"}</span>
-                <span style={{ fontSize: 10, fontWeight: 600, color: "#64748b", marginTop: 1 }}>{hhEjecDia}/{hhDia}HH</span>
-                {concluidas > 0 && (
+                <span style={{ fontSize: 17, fontWeight: 900, color, marginTop: 3 }}>
+                  {tot > 0 ? (esPasado ? `${p}%` : "—") : "—"}
+                </span>
+                <span style={{ fontSize: 10, fontWeight: 600, color: "#64748b", marginTop: 1 }}>
+                  {esPasado ? `${hhEjecDia}/` : "0/"}{hhDia}HH
+                </span>
+                {esPasado && concluidas > 0 && (
                   <span style={{ fontSize: 9, color: "#16a34a", marginTop: 1 }}>{concluidas}/{tot} cerradas</span>
                 )}
               </div>
