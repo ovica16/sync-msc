@@ -658,7 +658,7 @@ export default function CalibracionPage() {
       .then(([sups, supers]: [UserOpt[], UserOpt[]]) => {
         const combined = [
           ...sups,
-          ...supers.filter((u) => !sups.some((s) => s.id === u.id)),
+          ...supers.filter((u) => !sups.some((s) => s._id === u._id)),
         ];
         setSupervisores(combined);
       })
