@@ -72,16 +72,29 @@ export default function PrintClientTecnico({
 
       {/* Botones pantalla */}
       <div className="no-print" style={{ position: "fixed", top: 12, right: 12, display: "flex", gap: 8, zIndex: 100 }}>
-        <div style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 14px", fontSize: 12, color: "#475569", maxWidth: 260 }}>
-          Presiona <b>Ctrl+P</b> → destino <b>&quot;Guardar como PDF&quot;</b>
-        </div>
+        <button onClick={async () => {
+          try {
+            const { default: html2pdf } = await import("html2pdf.js");
+            const el = document.querySelector(".pagina") as HTMLElement;
+            if (!el) { window.print(); return; }
+            html2pdf().set({
+              margin: 8, filename: `reporte-turno-${reporte.tecnicoNombre.split(" ")[0]}-${reporte.fecha.slice(0,10)}.pdf`,
+              image: { type: "jpeg", quality: 0.98 },
+              html2canvas: { scale: 2, useCORS: true },
+              jsPDF: { unit: "mm", format: "a4", orientation: "landscape" },
+            }).from(el).save();
+          } catch { window.print(); }
+        }}
+          style={{ padding: "9px 20px", background: "#16a34a", color: "white", border: "none", borderRadius: 6, cursor: "pointer", fontWeight: 700, fontSize: 13 }}>
+          ⬇ Descargar PDF
+        </button>
         <button onClick={() => window.print()}
           style={{ padding: "9px 20px", background: "#1f3864", color: "white", border: "none", borderRadius: 6, cursor: "pointer", fontWeight: 700, fontSize: 13 }}>
-          🖨 Ctrl+P / Guardar PDF
+          🖨 Imprimir
         </button>
-        <button onClick={() => window.history.back()}
+        <button onClick={() => window.close()}
           style={{ padding: "9px 14px", background: "#64748b", color: "white", border: "none", borderRadius: 6, cursor: "pointer", fontSize: 13 }}>
-          ← Volver
+          ✕ Cerrar
         </button>
       </div>
 
