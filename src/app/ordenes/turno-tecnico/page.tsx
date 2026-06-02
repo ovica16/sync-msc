@@ -29,12 +29,15 @@ type OTRegistrada = {
 };
 
 // OT del plan semanal (desde /api/programacion-semanal)
+type BitacoraEntry = { turno: string; supervisor: string; nota: string; hhAtendidas: number; fecha?: string };
+
 type OTPlan = {
   id: string;           // "plan-{progId}-{otId}"
   numeroOT: string; tipoOT: string; descripcion: string;
   tag: string; descripcionEquipo?: string; hhTotal: number;
   personalAsignado: string[]; grupo: string; dia: string;
   estado: string; esGuardia: boolean;
+  bitacora?: BitacoraEntry[];
   ordenTrabajoId?: string; ordenTrabajoNum?: string;
   areaCodigo: string; disciplina: string;
 };
@@ -240,6 +243,7 @@ export default function ReporteTurnoTecnicoPage() {
           dia: ot.dia,
           estado: ot.estado ?? "no_iniciada",
           esGuardia: !!ot.esGuardia,
+          bitacora: Array.isArray(ot.bitacora) ? ot.bitacora : [],
           ordenTrabajoId: ot.ordenTrabajoId,
           ordenTrabajoNum: ot.ordenTrabajoNum,
           areaCodigo: prog.areaCodigo ?? area,
@@ -309,6 +313,7 @@ export default function ReporteTurnoTecnicoPage() {
           hhTotal: o.hhTotal,
           estado: o.estado,
           esGuardia: o.esGuardia,
+          bitacora: o.bitacora ?? [],
         })),
       };
       const res = await fetch("/api/reportes-turno", {
@@ -317,7 +322,7 @@ export default function ReporteTurnoTecnicoPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Error al guardar");
-      router.push(`/ordenes/turno-tecnico/${data.reporte._id}/imprimir`);
+      window.open(`/ordenes/turno-tecnico/${data.reporte._id}/imprimir`, "_blank");
     } catch (e: unknown) {
       setSubmitErr(e instanceof Error ? e.message : "Error desconocido");
       setSubmitting(false);
@@ -384,7 +389,7 @@ export default function ReporteTurnoTecnicoPage() {
                     </div>
                     <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
                       <button onClick={() => setDetalle(r)} style={S.btnGhost}>Ver</button>
-                      <button onClick={() => router.push(`/ordenes/turno-tecnico/${r._id}/imprimir`)}
+                      <button onClick={() => window.open(`/ordenes/turno-tecnico/${r._id}/imprimir`, "_blank")}
                         style={{ ...S.btnGreen, padding: "8px 14px", fontSize: 13 }}>🖨 PDF</button>
                     </div>
                   </div>
@@ -423,7 +428,7 @@ export default function ReporteTurnoTecnicoPage() {
               )}
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
                 <button onClick={() => setDetalle(null)} style={S.btnGhost}>Cerrar</button>
-                <button onClick={() => router.push(`/ordenes/turno-tecnico/${detalle._id}/imprimir`)} style={S.btnGreen}>🖨 Generar PDF</button>
+                <button onClick={() => window.open(`/ordenes/turno-tecnico/${detalle._id}/imprimir`, "_blank")} style={S.btnGreen}>🖨 Generar PDF</button>
               </div>
             </div>
           </div>
