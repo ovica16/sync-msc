@@ -16,6 +16,8 @@ const migraciones = [
   "ALTER TABLE \"RegistroCalibracion\" ADD COLUMN IF NOT EXISTS estado TEXT NOT NULL DEFAULT 'revision'",
   "ALTER TABLE \"RegistroCalibracion\" ADD COLUMN IF NOT EXISTS \"tecnicoFirma\" TEXT",
   "ALTER TABLE \"RegistroCalibracion\" ADD COLUMN IF NOT EXISTS \"supervisorFirma\" TEXT",
+  "ALTER TABLE \"Usuario\" ADD COLUMN IF NOT EXISTS \"esContratista\" BOOLEAN NOT NULL DEFAULT false",
+  "ALTER TABLE \"Usuario\" ADD COLUMN IF NOT EXISTS \"fechaExpiracion\" TIMESTAMP(3)",
 ];
 
 (async () => {
