@@ -681,11 +681,10 @@ export default function ReporteTurnoTecnicoPage() {
                                 <div style={{ flex: 1 }}>
                                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap" as const, alignItems: "center", marginBottom: 3 }}>
                                     <span style={S.badge(tipoColor)}>{linea?.tipoOT ?? "—"}</span>
-                                    <span style={{ fontWeight: 700, fontSize: 13 }}>#{o.numeroOT}</span>
-                                    {o.otJdeNumero && <span style={{ fontFamily: "monospace", fontSize: 11, color: "#64748b" }}>JDE: {o.otJdeNumero}</span>}
+                                    <span style={{ fontWeight: 700, fontSize: 13, fontFamily: "monospace" }}>{o.otJdeNumero ?? `#${o.numeroOT}`}</span>
+                                    {o.otJdeNumero && <span style={{ fontSize: 11, color: "#94a3b8" }}>#{o.numeroOT}</span>}
                                     <span style={{ fontFamily: "monospace", fontSize: 12, color: "#1d4ed8" }}>{linea?.tag}</span>
                                     {linea?.tiempoRealHrs && <span style={{ fontSize: 11, color: "#16a34a", fontWeight: 700 }}>{linea.tiempoRealHrs}h</span>}
-                                    {/* Fecha de la OT — confirma que es del día correcto */}
                                     <span style={{ fontSize: 10, color: "#94a3b8" }}>
                                       📅 {new Date(o.fecha).toLocaleDateString("es-BO", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "UTC" })}
                                     </span>
@@ -739,7 +738,8 @@ export default function ReporteTurnoTecnicoPage() {
                                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap" as const, alignItems: "center", marginBottom: 3 }}>
                                     <span style={{ fontSize: 10, fontWeight: 700, background: "#ede9fe", color: "#7c3aed", borderRadius: 4, padding: "1px 6px" }}>Desde {fechaOT}</span>
                                     <span style={S.badge(tipoColor)}>{linea?.tipoOT ?? "—"}</span>
-                                    <span style={{ fontWeight: 700, fontSize: 13 }}>{o.otJdeNumero ?? `#${o.numeroOT}`}</span>
+                                    <span style={{ fontWeight: 700, fontSize: 13, fontFamily: "monospace" }}>{o.otJdeNumero ?? `#${o.numeroOT}`}</span>
+                                    {o.otJdeNumero && <span style={{ fontSize: 11, color: "#94a3b8" }}>#{o.numeroOT}</span>}
                                     <span style={{ fontFamily: "monospace", fontSize: 12, color: "#1d4ed8" }}>{linea?.tag}</span>
                                   </div>
                                   <p style={{ fontSize: 12, color: "#475569" }}>
