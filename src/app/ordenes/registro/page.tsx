@@ -1295,7 +1295,14 @@ export default function RegistroOTPage() {
               const matchPorId = (ot.personalAsignadoIds ?? []).includes(user.id);
               // Fallback por nombre para OTs aún sin IDs (planes viejos / no re-editados).
               const matchPorNombre = (ot.personalAsignado ?? []).some(p => nombreCoincide(p, user.nombre));
-              if (!matchPorId && !matchPorNombre) continue;
+              // Fallback de área para rol=6: si el plan es de su área y personalAsignado
+              // no tiene nombres reales (solo "Contratista" genérico del Excel), mostrar igual.
+              const paNames = (ot.personalAsignado ?? []).map(n => n.trim().toLowerCase());
+              const soloGenerico = paNames.length === 0 || paNames.every(n => n === "contratista" || n === "");
+              const matchPorArea = user.rol === 6
+                && soloGenerico
+                && (user.areas ?? []).includes(plan.areaCodigo ?? "");
+              if (!matchPorId && !matchPorNombre && !matchPorArea) continue;
             } else if (user.rol >= 3 && user.areas?.length > 0 && plan.areaCodigo) {
               if (!user.areas.includes(plan.areaCodigo)) continue;
             }
