@@ -137,6 +137,7 @@ export default function ReporteTurnoTecnicoPage() {
   const [reportes, setReportes]       = useState<ReporteDoc[]>([]);
   const [otsRegistradas, setOtsReg]   = useState<OTRegistrada[]>([]);
   const [otsPlan, setOtsPlan]         = useState<OTPlan[]>([]);
+  const [otsContinuacion, setOtsContinuacion] = useState<OTRegistrada[]>([]);
   const [areas, setAreas]             = useState<AreaOpt[]>([]);
   const [loadingReportes, setLoadingRep] = useState(true);
   const [loadingOTs, setLoadingOTs]   = useState(false);
@@ -195,6 +196,7 @@ export default function ReporteTurnoTecnicoPage() {
     setLoadingOTs(true);
     setOtsReg([]);
     setOtsPlan([]);
+    setOtsContinuacion([]);
 
     const area = areaEfectiva;
     const { semana, anio } = getWeekYear(form.fecha);
@@ -252,6 +254,28 @@ export default function ReporteTurnoTecnicoPage() {
       }
     }
     setOtsPlan(planes);
+
+    // ── 3. OTs en_proceso del técnico de días anteriores (continuación) ────
+    // Busca OTs que el técnico dejó abiertas en días previos de la semana
+    const paramsCont = new URLSearchParams({ estado: "en_proceso", limit: "50" });
+    if (area) paramsCont.set("area", area);
+    const dataCont: OTRegistrada[] = await fetch(`/api/ordenes?${paramsCont}`).then(r => r.json()).catch(() => []);
+    const hoy = form.fecha;
+    const continuacion = (Array.isArray(dataCont) ? dataCont : []).filter(o => {
+      // Solo OTs de días anteriores (no de hoy)
+      if (o.fecha.slice(0, 10) >= hoy) return false;
+      // Solo OTs del plan (origenPlan implícito: tienen otJdeNumero)
+      if (!o.otJdeNumero) return false;
+      // Si es técnico (rol=4), solo sus OTs
+      if (user?.rol === 4) {
+        return o.tecnicos.some(t =>
+          t.nombreCompleto.toLowerCase().includes(user.nombre.toLowerCase())
+        );
+      }
+      return true;
+    });
+    setOtsContinuacion(continuacion);
+
     setLoadingOTs(false);
   }, [form.fecha, form.turno, areaEfectiva, user]);
 
@@ -352,6 +376,9 @@ export default function ReporteTurnoTecnicoPage() {
   const bitacora = otsPlanFiltradas.filter(o => o.esGuardia);
   const planNormal = otsPlanFiltradas.filter(o => !o.esGuardia);
 
+  const otsContinuacionFiltradas = otsContinuacion.filter(o =>
+    matchFilter(filtroTexto, [o.numeroOT, o.otJdeNumero ?? "", ...o.lineas.map(l => l.tag + " " + (l.descripcionEquipo ?? ""))])
+  );
   const totalSeleccionadas = form.otIds.length + form.otsPlanIds.length;
 
   // ─── Render ─────────────────────────────────────────────────────────────────
@@ -665,6 +692,61 @@ export default function ReporteTurnoTecnicoPage() {
                                   </div>
                                   <p style={{ fontSize: 12, color: "#475569" }}>
                                     {linea?.descripcionEquipo ?? linea?.sintoma ?? linea?.descripcionTrabajo ?? "—"}
+                                  </p>
+                                  {sel && (
+                                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" as const, marginTop: 6 }} onClick={e => e.stopPropagation()}>
+                                      <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", fontSize: 12 }}>
+                                        <input type="checkbox" checked={form.otsCriticas.includes(o._id)} onChange={() => toggleCritica(o._id)} style={{ accentColor: "#dc2626" }} />
+                                        <span style={{ color: "#dc2626", fontWeight: 600 }}>⚠ Crítica</span>
+                                      </label>
+                                      <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", fontSize: 12 }}>
+                                        <input type="checkbox" checked={form.otsPendientes.includes(o._id)} onChange={() => togglePendiente(o._id)} style={{ accentColor: "#d97706" }} />
+                                        <span style={{ color: "#d97706", fontWeight: 600 }}>→ Pasa al siguiente turno</span>
+                                      </label>
+                                    </div>
+                                  )}
+                                  {sel && (
+                                    <div style={{ marginTop: 6 }} onClick={e => e.stopPropagation()}>
+                                      <input value={form.notasOTs[o._id] ?? ""} onChange={e => patchForm({ notasOTs: { ...form.notasOTs, [o._id]: e.target.value } })}
+                                        placeholder="Nota sobre esta OT (opcional)…" style={{ ...S.input, fontSize: 12 }} />
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </>
+                    )}
+
+                    {/* ── OTs en continuación (en_proceso de días anteriores) ── */}
+                    {otsContinuacionFiltradas.length > 0 && (
+                      <>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: "#7c3aed", letterSpacing: "0.06em", textTransform: "uppercase" as const, marginBottom: 8, marginTop: 12, display: "flex", alignItems: "center", gap: 6 }}>
+                          <span>⏳ En continuación — días anteriores ({otsContinuacionFiltradas.length})</span>
+                        </div>
+                        {otsContinuacionFiltradas.map(o => {
+                          const sel = form.otIds.includes(o._id);
+                          const linea = o.lineas[0];
+                          const tipoColor = TIPO_COLOR[linea?.tipoOT ?? ""] ?? "#64748b";
+                          const fechaOT = new Date(o.fecha).toLocaleDateString("es-BO", { day: "2-digit", month: "2-digit", timeZone: "UTC" });
+                          return (
+                            <div key={o._id} style={{ border: sel ? "2px solid #7c3aed" : "1px solid #ddd6fe", borderRadius: 10, padding: "10px 12px", marginBottom: 8, background: sel ? "#faf5ff" : "#fefcff", cursor: "pointer" }}
+                              onClick={() => toggleOT(o._id, false)}>
+                              <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                                <input type="checkbox" checked={sel} onChange={() => toggleOT(o._id, false)} style={{ marginTop: 3, accentColor: "#7c3aed", width: 16, height: 16 }} onClick={e => e.stopPropagation()} />
+                                <div style={{ flex: 1 }}>
+                                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" as const, alignItems: "center", marginBottom: 3 }}>
+                                    <span style={{ fontSize: 10, fontWeight: 700, background: "#ede9fe", color: "#7c3aed", borderRadius: 4, padding: "1px 6px" }}>Desde {fechaOT}</span>
+                                    <span style={S.badge(tipoColor)}>{linea?.tipoOT ?? "—"}</span>
+                                    <span style={{ fontWeight: 700, fontSize: 13 }}>{o.otJdeNumero ?? `#${o.numeroOT}`}</span>
+                                    <span style={{ fontFamily: "monospace", fontSize: 12, color: "#1d4ed8" }}>{linea?.tag}</span>
+                                  </div>
+                                  <p style={{ fontSize: 12, color: "#475569" }}>
+                                    {linea?.descripcionEquipo ?? linea?.sintoma ?? linea?.descripcionTrabajo ?? "—"}
+                                  </p>
+                                  <p style={{ fontSize: 11, color: "#7c3aed", marginTop: 2 }}>
+                                    👤 {o.tecnicos.map(t => t.nombreCompleto).join(", ")}
                                   </p>
                                   {sel && (
                                     <div style={{ display: "flex", gap: 10, flexWrap: "wrap" as const, marginTop: 6 }} onClick={e => e.stopPropagation()}>
