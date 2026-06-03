@@ -1662,17 +1662,25 @@ export default function RegistroOTPage() {
                               <span style={{ fontSize: 10, fontWeight: 700, background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe", borderRadius: 6, padding: "2px 8px" }}>
                                 🔁 RECURRENTE
                               </span>
-                              <button
-                                onClick={() => { setAvanceRef(ref); setAvanceForm({ hhTrabajadas: "", tareas: [], tareaInput: "", observaciones: "" }); }}
-                                style={{ ...S.btnPrimary(), padding: "6px 12px", fontSize: 12 }}>
-                                + Avance del día
-                              </button>
-                              <button
-                                onClick={() => enviarRevisionRecurrente(ref)}
-                                disabled={savingRevision}
-                                style={{ ...S.btnGreen(savingRevision), padding: "5px 10px", fontSize: 11 }}>
-                                {savingRevision ? "Enviando…" : "Enviar a revisión ✓"}
-                              </button>
+                              {ot.estado !== "completada" && ot.estado !== "en_revision" && (
+                                <button
+                                  onClick={() => { setAvanceRef(ref); setAvanceForm({ hhTrabajadas: "", tareas: [], tareaInput: "", observaciones: "" }); }}
+                                  style={{ ...S.btnPrimary(), padding: "6px 12px", fontSize: 12 }}>
+                                  + Avance del día
+                                </button>
+                              )}
+                              {ot.estado !== "completada" && ot.estado !== "en_revision" ? (
+                                <button
+                                  onClick={() => enviarRevisionRecurrente(ref)}
+                                  disabled={savingRevision}
+                                  style={{ ...S.btnGreen(savingRevision), padding: "5px 10px", fontSize: 11 }}>
+                                  {savingRevision ? "Enviando…" : "Enviar a revisión ✓"}
+                                </button>
+                              ) : (
+                                <span style={{ fontSize: 10, fontWeight: 700, background: "#f0fdf4", color: "#16a34a", border: "1px solid #bbf7d0", borderRadius: 6, padding: "2px 8px" }}>
+                                  ✓ Enviada a revisión
+                                </span>
+                              )}
                             </div>
                           ) : (
                             <button
