@@ -141,7 +141,13 @@ const DIA_MAP: DiaSem[] = ["Do", "Lu", "Ma", "Mi", "Ju", "Vi", "Sa"];
 // "James Quispe" vs "Quispe Valda José Calasanz" → 1 token común → false ✓
 // "José Quispe"  vs "Quispe Valda José Calasanz" → 2 tokens comunes → true ✓
 function normalizar(s: string): string {
-  return s.trim().toLowerCase().normalize("NFD").replace(/\p{Mn}/gu, "").replace(/\s+/g, " ");
+  return s.trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Mn}/gu, "")          // quitar marcas de acento
+    .replace(/[^\p{L}\p{N} ]/gu, "")  // quitar caracteres invisibles, nbsp, etc.
+    .replace(/\s+/g, " ")
+    .trim();
 }
 function nombreCoincide(planNombre: string, userNombre: string): boolean {
   const normA = normalizar(planNombre);
@@ -1284,7 +1290,7 @@ export default function RegistroOTPage() {
           // Cargar TODAS las OTs de la semana (todos los días)
           for (const ot of plan.otsProgramadas) {
             if (user.rol === 4 || user.rol === 6) {
-              if (!ot.personalAsignado.some(p => nombreCoincide(p, user.nombre))) continue;
+              if (!(ot.personalAsignado ?? []).some(p => nombreCoincide(p, user.nombre))) continue;
             } else if (user.rol >= 3 && user.areas?.length > 0 && plan.areaCodigo) {
               if (!user.areas.includes(plan.areaCodigo)) continue;
             }
