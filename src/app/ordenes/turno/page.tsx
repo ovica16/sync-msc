@@ -676,7 +676,7 @@ export default function ReporteTurnoPage() {
                               style={{ marginTop: 2, accentColor: "#7c3aed", cursor: "pointer" }} />
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" as const, alignItems: "center" }}>
-                                <span style={{ fontFamily: "monospace", fontWeight: 800, fontSize: 12, color: "#0f2847" }}>{o.numeroOT}</span>
+                                <span style={{ fontFamily: "monospace", fontWeight: 800, fontSize: 12, color: "#0f2847" }}>{o.otJdeNumero ?? o.numeroOT}</span>
                                 {o.disciplina && <span style={{ fontSize: 10, fontWeight: 700, background: "#e0f2fe", color: "#0369a1", padding: "1px 6px", borderRadius: 4 }}>{o.disciplina}</span>}
                                 <span style={{ fontSize: 11, fontWeight: 700, color: "#1d4ed8" }}>{o.lineas[0]?.tag}</span>
                                 {o.hhTotal && <span style={{ fontSize: 11, color: "#64748b" }}>{o.hhTotal}HH</span>}
@@ -763,7 +763,7 @@ export default function ReporteTurnoPage() {
                                       <input type="checkbox" checked={sel} onChange={() => toggleOT(ot._id)} style={{ width: 16, height: 16, accentColor: "#d97706", cursor: "pointer" }} />
                                       <div>
                                         <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" as const, marginBottom: 2 }}>
-                                          <span style={{ fontWeight: 700, fontSize: 13, fontFamily: "monospace" }}>{ot.numeroOT}</span>
+                                          <span style={{ fontWeight: 700, fontSize: 13, fontFamily: "monospace" }}>{ot.otJdeNumero ?? ot.numeroOT}</span>
                                           {ot.areaCodigo && <span style={S.badge("#475569")}>{ot.areaCodigo}</span>}
                                           <span style={S.badge(estadoColor)}>{ESTADO_LABEL[ot.estado] ?? ot.estado}</span>
                                           {ot.lineas.map((l, i) => <span key={i} style={S.badge(TIPO_COLOR[l.tipoOT] ?? "#64748b")}>{l.tipoOT}</span>)}
@@ -872,7 +872,7 @@ export default function ReporteTurnoPage() {
                             <input type="checkbox" checked={sel} onChange={() => toggleOT(ot._id)} style={{ width: 16, height: 16, accentColor: "#2563eb", cursor: "pointer" }} />
                             <div>
                               <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginBottom: 2 }}>
-                                <span style={{ fontWeight: 700, fontSize: 13, fontFamily: "monospace" }}>{ot.numeroOT}</span>
+                                <span style={{ fontWeight: 700, fontSize: 13, fontFamily: "monospace" }}>{ot.otJdeNumero ?? ot.numeroOT}</span>
                                 {esPlan && (
                                   <span style={{ fontSize: 9, fontWeight: 700, background: "#fef3c7", color: "#92400e", border: "1px solid #fde68a", borderRadius: 4, padding: "1px 5px" }}>
                                     PLAN
@@ -1146,7 +1146,7 @@ export default function ReporteTurnoPage() {
                     return (
                       <div key={ot._id} style={{ padding: "8px 0", borderBottom: "1px solid #f1f5f9" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                          <span style={{ fontWeight: 700, fontSize: 13, minWidth: 70 }}>#{ot.numeroOT}</span>
+                          <span style={{ fontWeight: 700, fontSize: 13, minWidth: 70 }}>{ot.otJdeNumero ?? ot.numeroOT}</span>
                           <span style={S.badge("#475569")}>{ot.areaCodigo}</span>
                           <span style={S.badge(ESTADO_COLOR[ot.estado] ?? "#64748b")}>{ESTADO_LABEL[ot.estado] ?? ot.estado}</span>
                           {crit && <span style={S.badge("#dc2626")}>⚠ Crítica</span>}
@@ -1287,7 +1287,7 @@ export default function ReporteTurnoPage() {
                   return (
                     <div key={ot._id} style={{ padding: "10px 0", borderBottom: "1px solid #f1f5f9" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
-                        <span style={{ fontWeight: 800, fontSize: 14 }}>#{ot.numeroOT}</span>
+                        <span style={{ fontWeight: 800, fontSize: 14 }}>{ot.otJdeNumero ?? ot.numeroOT}</span>
                         <span style={S.badge("#475569")}>{ot.areaCodigo}</span>
                         <span style={S.badge(estadoColor)}>{ESTADO_LABEL[ot.estado] ?? ot.estado}</span>
                         {ot.lineas.map((l, i) => <span key={i} style={S.badge(TIPO_COLOR[l.tipoOT] ?? "#64748b")}>{l.tipoOT}</span>)}
