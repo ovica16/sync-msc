@@ -308,6 +308,7 @@ export interface IOTProgramada {
   hrsTrabajo: number;         // horas por persona
   hhTotal: number;            // personas × hrsTrabajo
   personalAsignado: string[]; // nombres de técnicos asignados
+  personalAsignadoIds?: string[]; // usuarioIds para match exacto por identidad
   grupo: GrupoTrabajo;
   dia: DiaSemana;
   estado: EstadoOTProgramada;

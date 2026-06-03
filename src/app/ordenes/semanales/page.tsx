@@ -375,10 +375,15 @@ function AsignarTecnicosModal({
 
   async function guardar() {
     setSaving(true);
+    // Derivar usuarioIds de los nombres seleccionados (match exacto por identidad).
+    // Nombres sin usuario en la lista (ej. "Contratista" del Excel) quedan sin id.
+    const ids = seleccionados
+      .map(nombre => tecnicos.find(t => t.nombre === nombre)?._id)
+      .filter((x): x is string => Boolean(x));
     const res = await fetch(`/api/programacion-semanal/${programaId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ numeroOT: ot.numeroOT, dia: ot.dia, personalAsignado: seleccionados }),
+      body: JSON.stringify({ numeroOT: ot.numeroOT, dia: ot.dia, personalAsignado: seleccionados, personalAsignadoIds: ids }),
     });
     const data = await res.json();
     setSaving(false);

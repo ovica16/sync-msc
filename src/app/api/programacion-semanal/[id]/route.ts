@@ -40,7 +40,7 @@ export async function PUT(req: NextRequest, { params }: Ctx) {
     const body = await req.json();
     const { numeroOT, dia, estado, observaciones,
             pasarNoche, pasarNocheMotivo, pasarNocheNota, pasarNochePor,
-            personalAsignado } = body;
+            personalAsignado, personalAsignadoIds } = body;
 
     if (!numeroOT || !dia)
       return Response.json({ ok: false, error: "numeroOT y dia son requeridos" }, { status: 400 });
@@ -50,7 +50,8 @@ export async function PUT(req: NextRequest, { params }: Ctx) {
       data: {
         ...(estado             !== undefined ? { estado } : {}),
         ...(observaciones      !== undefined ? { observaciones } : {}),
-        ...(personalAsignado   !== undefined ? { personalAsignado } : {}),
+        ...(personalAsignado    !== undefined ? { personalAsignado } : {}),
+        ...(personalAsignadoIds !== undefined ? { personalAsignadoIds } : {}),
         ...(pasarNoche         !== undefined ? {
           pasarNoche,
           pasarNocheMotivo: pasarNocheMotivo ?? "",
