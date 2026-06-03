@@ -10,11 +10,12 @@ export type Disciplina = "GENERAL" | "MEC" | "ELEC" | "INST";
 // ─── OT domain literals ───────────────────────────────────────────────────────
 export type TurnoTipo = "Diurno" | "Nocturno" | "Parada de Planta" | "Otro";
 
-export type TipoOT = "CMP" | "CMR" | "PMP" | "PMT" | "PTJ";
+export type TipoOT = "CMP" | "CMR" | "PMP" | "PMT" | "PDM" | "PTJ";
 // CMP = Correctivo Mayor Programado   (ISO: Corrective major)
 // CMR = Correctivo Menor Rutinario    (ISO: Corrective minor)
 // PMP = Preventivo Mayor Programado   (ISO: Preventive major)
 // PMT = Preventivo Menor de Turno     (ISO: Preventive minor)
+// PDM = Mantenimiento Predictivo      (ISO: Predictive)
 // PTJ = Proyecto / Trabajo de Ingeniería
 
 export type EstadoOT =
