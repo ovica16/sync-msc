@@ -96,7 +96,7 @@ const ESTADO_LABEL: Record<string, string> = {
 };
 
 const TIPO_COLOR: Record<string, string> = {
-  CMP: "#dc2626", CMR: "#d97706", PMP: "#2563eb", PMT: "#0891b2", PTJ: "#7c3aed",
+  CMP: "#dc2626", CMR: "#d97706", PMP: "#2563eb", PMT: "#0891b2", PDM: "#059669", PTJ: "#7c3aed",
 };
 
 const CLASIFICACIONES_RCM = [
@@ -1198,21 +1198,29 @@ export default function ReporteOTPage() {
         )}
 
         {/* ── Avances Diarios (OTs multi-día del plan) ── */}
-        {ot.origenPlan && (
+        {ot.origenPlan && (() => {
+          const hhLineas = ot.lineas.reduce((s, l) => s + (l.tiempoRealHrs ?? 0), 0);
+          const diasLineas = hhLineas > 0 ? 1 : 0;
+          const hhDiarios = (ot.registrosDiarios ?? []).reduce((s, r) => s + r.hhTrabajadas, 0);
+          const diasDiarios = ot.registrosDiarios?.length ?? 0;
+          const totalDias = diasLineas + diasDiarios;
+          const totalHH = hhLineas + hhDiarios;
+          const puedeAgregarAvance = !["pendiente_revision", "revisado", "concluido"].includes(ot.estado);
+          return (
           <div style={S.card}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
               <div>
                 <div style={{ fontWeight: 700, fontSize: 13, color: "#0f2847" }}>
                   Avances diarios
-                  {(ot.registrosDiarios?.length ?? 0) > 0 && (
+                  {totalDias > 0 && (
                     <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 700, background: "#dbeafe", color: "#1d4ed8", borderRadius: 4, padding: "2px 7px" }}>
-                      {ot.registrosDiarios!.length} día{ot.registrosDiarios!.length !== 1 ? "s" : ""} · {ot.registrosDiarios!.reduce((s, r) => s + r.hhTrabajadas, 0)}HH acumuladas
+                      {totalDias} día{totalDias !== 1 ? "s" : ""} · {totalHH}HH acumuladas
                     </span>
                   )}
                 </div>
                 <p style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>Registro de trabajo por día para esta OT del plan</p>
               </div>
-              {!isConcluido && (esTecnico || esAdmin) && !showAvance && (
+              {puedeAgregarAvance && (esTecnico || esAdmin) && !showAvance && (
                 <button
                   onClick={() => setShowAvance(true)}
                   style={{ background: "#2563eb", color: "white", border: "none", borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
@@ -1326,26 +1334,27 @@ export default function ReporteOTPage() {
                   </div>
                 ))}
                 {/* Totales */}
-                {(ot.registrosDiarios?.length ?? 0) > 1 && (
+                {totalDias > 1 && (
                   <div style={{ background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 8, padding: "10px 14px", display: "flex", gap: 24 }}>
                     <div>
                       <span style={{ fontSize: 11, fontWeight: 700, color: "#0369a1" }}>Total días</span>
-                      <p style={{ fontSize: 16, fontWeight: 800, color: "#0369a1" }}>{ot.registrosDiarios!.length}</p>
+                      <p style={{ fontSize: 16, fontWeight: 800, color: "#0369a1" }}>{totalDias}</p>
                     </div>
                     <div>
                       <span style={{ fontSize: 11, fontWeight: 700, color: "#0369a1" }}>HH acumuladas</span>
-                      <p style={{ fontSize: 16, fontWeight: 800, color: "#0369a1" }}>{ot.registrosDiarios!.reduce((s, r) => s + r.hhTrabajadas, 0)}HH</p>
+                      <p style={{ fontSize: 16, fontWeight: 800, color: "#0369a1" }}>{totalHH}HH</p>
                     </div>
                     <div style={{ flex: 1 }}>
                       <span style={{ fontSize: 11, fontWeight: 700, color: "#0369a1" }}>Técnicos</span>
-                      <p style={{ fontSize: 12, color: "#0369a1" }}>{[...new Set(ot.registrosDiarios!.map(r => r.tecnico))].join(", ")}</p>
+                      <p style={{ fontSize: 12, color: "#0369a1" }}>{[...new Set(ot.tecnicos.map(t => t.nombreCompleto).concat((ot.registrosDiarios ?? []).map(r => r.tecnico)))].join(", ")}</p>
                     </div>
                   </div>
                 )}
               </div>
             )}
           </div>
-        )}
+          );
+        })()}
 
         {/* Historial */}
         {ot.historialCambios.length > 0 && (
