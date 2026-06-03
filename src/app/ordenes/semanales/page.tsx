@@ -541,8 +541,9 @@ function VistaTabla({
   const hhProg      = otsDelDia.reduce((s, o) => s + (o.hhTotal ?? 0), 0);
   const hhEjec      = otsDelDia.filter((o) => o.estado === "completada").reduce((s, o) => s + (o.hhTotal ?? 0), 0);
 
-  // Agrupar OTs del día por grupo para mostrar secciones
-  const grupos = Array.from(new Set(otsDelDia.map((o) => o.grupo)));
+  // Agrupar OTs del día por grupo en orden definido: G1→G2→G3→G4→Diurno→Nocturno
+  const gruposPresentes = new Set(otsDelDia.map((o) => o.grupo));
+  const grupos = GRUPOS.filter(g => gruposPresentes.has(g));
 
   return (
     <div style={{ display: "flex", flexDirection: "column" }}>

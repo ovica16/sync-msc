@@ -145,24 +145,38 @@ function normalizar(s: string): string {
   return s.trim()
     .toLowerCase()
     .normalize("NFD")
-    .replace(/\p{Mn}/gu, "")          // quitar marcas de acento
-    .replace(/[^\p{L}\p{N} ]/gu, "")  // quitar caracteres invisibles, nbsp, etc.
+    .replace(/\p{Mn}/gu, "")
+    .replace(/[^\p{L}\p{N} ]/gu, "")
     .replace(/\s+/g, " ")
     .trim();
+}
+// Distancia de edición ≤ 1 para tolerar typos de 1 carácter (ej: "Altamirando" vs "Altamirano")
+function editDist1(a: string, b: string): boolean {
+  if (a === b) return true;
+  const d = Math.abs(a.length - b.length);
+  if (d > 1) return false;
+  let diff = 0;
+  let i = 0, j = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] !== b[j]) {
+      if (++diff > 1) return false;
+      if (a.length > b.length) i++; else if (b.length > a.length) j++; else { i++; j++; }
+    } else { i++; j++; }
+  }
+  return true;
 }
 function nombreCoincide(planNombre: string, userNombre: string): boolean {
   const normA = normalizar(planNombre);
   const normB = normalizar(userNombre);
-  // Coincidencia exacta o una cadena contiene a la otra (nombres completos)
   if (normA === normB || normA.includes(normB) || normB.includes(normA)) return true;
-  // Subset de tokens: todos los del nombre más corto en el más largo
-  // "Cordova Felix" ⊂ "Cordova Ramos Felix" → true ✓
-  // "James Quispe" vs "Quispe Valda José" → "james" no está → false ✓
-  const tokA = new Set(normA.split(" ").filter(t => t.length > 2));
-  const tokB = new Set(normB.split(" ").filter(t => t.length > 2));
-  const [menor, mayor] = tokA.size <= tokB.size ? [tokA, tokB] : [tokB, tokA];
-  if (menor.size === 0) return false;
-  for (const t of menor) { if (!mayor.has(t)) return false; }
+  const tokA = normA.split(" ").filter(t => t.length > 2);
+  const tokB = normB.split(" ").filter(t => t.length > 2);
+  const [menor, mayor] = tokA.length <= tokB.length ? [tokA, tokB] : [tokB, tokA];
+  if (menor.length === 0) return false;
+  // Cada token del nombre más corto debe tener un par en el más largo con dist ≤ 1
+  for (const t of menor) {
+    if (!mayor.some(m => editDist1(t, m))) return false;
+  }
   return true;
 }
 
