@@ -104,6 +104,7 @@ type OTPlan = {
   descripcion: string; tag: string; descripcionEquipo?: string;
   hhTotal?: number; personas?: number; grupo: string; dia: DiaSem; estado: string;
   personalAsignado: string[];
+  personalAsignadoIds?: string[];
   ordenTrabajoId?: string; ordenTrabajoNum?: string;
   pasarNoche?: boolean; pasarNocheMotivo?: string; pasarNocheNota?: string; pasarNochePor?: string;
   esGuardia?: boolean;
@@ -1290,7 +1291,11 @@ export default function RegistroOTPage() {
           // Cargar TODAS las OTs de la semana (todos los días)
           for (const ot of plan.otsProgramadas) {
             if (user.rol === 4 || user.rol === 6) {
-              if (!(ot.personalAsignado ?? []).some(p => nombreCoincide(p, user.nombre))) continue;
+              // Match por identidad (usuarioId) — exacto, independiente del texto del nombre.
+              const matchPorId = (ot.personalAsignadoIds ?? []).includes(user.id);
+              // Fallback por nombre para OTs aún sin IDs (planes viejos / no re-editados).
+              const matchPorNombre = (ot.personalAsignado ?? []).some(p => nombreCoincide(p, user.nombre));
+              if (!matchPorId && !matchPorNombre) continue;
             } else if (user.rol >= 3 && user.areas?.length > 0 && plan.areaCodigo) {
               if (!user.areas.includes(plan.areaCodigo)) continue;
             }

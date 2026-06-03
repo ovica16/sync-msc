@@ -18,6 +18,7 @@ const migraciones = [
   "ALTER TABLE \"RegistroCalibracion\" ADD COLUMN IF NOT EXISTS \"supervisorFirma\" TEXT",
   "ALTER TABLE \"Usuario\" ADD COLUMN IF NOT EXISTS \"esContratista\" BOOLEAN NOT NULL DEFAULT false",
   "ALTER TABLE \"Usuario\" ADD COLUMN IF NOT EXISTS \"fechaExpiracion\" TIMESTAMP(3)",
+  "ALTER TABLE \"OtProgramada\" ADD COLUMN IF NOT EXISTS \"personalAsignadoIds\" TEXT[] NOT NULL DEFAULT '{}'",
 ];
 
 (async () => {
@@ -39,6 +40,28 @@ const migraciones = [
     console.log('[migrate] OtProgramada huérfanas reseteadas:', res.rowCount);
   } catch(e) {
     console.log('[migrate] Reset huérfanas skip:', e.message.slice(0, 80));
+  }
+
+  // Backfill personalAsignadoIds: rellenar IDs desde los nombres ya asignados
+  // (match exacto contra Usuario.nombre, de donde salieron los nombres del editor).
+  // Solo rellena las OTs sin IDs aún → idempotente, no pisa asignaciones por identidad.
+  try {
+    const res = await pool.query(`
+      UPDATE "OtProgramada" ot
+      SET "personalAsignadoIds" = sub.ids
+      FROM (
+        SELECT o.id, array_agg(DISTINCT u.id) AS ids
+        FROM "OtProgramada" o
+        CROSS JOIN LATERAL unnest(o."personalAsignado") AS pn(nombre)
+        JOIN "Usuario" u ON u.nombre = pn.nombre
+        GROUP BY o.id
+      ) sub
+      WHERE ot.id = sub.id
+        AND (ot."personalAsignadoIds" IS NULL OR cardinality(ot."personalAsignadoIds") = 0)
+    `);
+    console.log('[migrate] personalAsignadoIds backfill:', res.rowCount);
+  } catch(e) {
+    console.log('[migrate] Backfill IDs skip:', e.message.slice(0, 100));
   }
 
   // Asegurar contador 2026 >= 286 (9 certs reales subidos, próximo = 287)

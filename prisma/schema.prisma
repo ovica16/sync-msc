@@ -235,6 +235,7 @@ model OtProgramada {
   hrsTrabajo            Float    @default(0)
   hhTotal               Float    @default(0)
   personalAsignado      String[]
+  personalAsignadoIds   String[] // usuarioIds para match exacto (independiente del texto del nombre)
   grupo                 String
   dia                   String   // Lu|Ma|Mi|Ju|Vi|Sa|Do
   estado                String   @default("no_iniciada")
