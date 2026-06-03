@@ -138,19 +138,40 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
       });
     }
 
-    // Agregar avance diario y marcar ese día en el plan como completada
+    // Agregar avance diario — upsert por fecha+usuario para evitar duplicados
     if (registroDiario) {
-      await prisma.otRegistroDiario.create({
-        data: {
+      const rdUsuarioId = registroDiario.usuarioId ?? usuarioId ?? null;
+      const rdFecha = new Date(registroDiario.fecha);
+      // Buscar si ya existe un registro del mismo día y técnico
+      const existing = await prisma.otRegistroDiario.findFirst({
+        where: {
           ordenTrabajoId: id,
-          fecha: new Date(registroDiario.fecha),
-          tecnico: registroDiario.tecnico,
-          usuarioId: registroDiario.usuarioId ?? usuarioId ?? null,
-          hhTrabajadas: registroDiario.hhTrabajadas,
-          tareas: registroDiario.tareasEjecutadas ?? [],
-          observaciones: registroDiario.observaciones ?? null,
+          fecha: rdFecha,
+          ...(rdUsuarioId ? { usuarioId: rdUsuarioId } : { tecnico: registroDiario.tecnico }),
         },
       });
+      if (existing) {
+        await prisma.otRegistroDiario.update({
+          where: { id: existing.id },
+          data: {
+            hhTrabajadas: registroDiario.hhTrabajadas,
+            tareas: registroDiario.tareasEjecutadas ?? [],
+            observaciones: registroDiario.observaciones ?? null,
+          },
+        });
+      } else {
+        await prisma.otRegistroDiario.create({
+          data: {
+            ordenTrabajoId: id,
+            fecha: rdFecha,
+            tecnico: registroDiario.tecnico,
+            usuarioId: rdUsuarioId,
+            hhTrabajadas: registroDiario.hhTrabajadas,
+            tareas: registroDiario.tareasEjecutadas ?? [],
+            observaciones: registroDiario.observaciones ?? null,
+          },
+        });
+      }
       // Marcar solo el día trabajado como completada en el plan
       const diaAvance = fechaToDiaAbrev(registroDiario.fecha);
       if (diaAvance) {

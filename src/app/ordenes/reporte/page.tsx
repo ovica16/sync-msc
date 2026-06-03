@@ -229,6 +229,8 @@ export default function ReporteOTPage() {
 
   // Eliminar OT (solo admin)
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  // Eliminar avance diario (supervisor/admin)
+  const [deletingAvanceId, setDeletingAvanceId] = useState<string | null>(null);
 
   // Avance diario (OTs multi-día)
   const [showAvance, setShowAvance]   = useState(false);
@@ -1299,7 +1301,17 @@ export default function ReporteOTPage() {
                         </span>
                         <span style={{ fontSize: 11, fontWeight: 700, background: "#dbeafe", color: "#1d4ed8", borderRadius: 4, padding: "2px 8px" }}>{r.hhTrabajadas}HH</span>
                       </div>
-                      <span style={{ fontSize: 11, color: "#94a3b8" }}>{r.tecnico}</span>
+                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                        <span style={{ fontSize: 11, color: "#94a3b8" }}>{r.tecnico}</span>
+                        {esSup && r._id && (
+                          <button
+                            onClick={() => setDeletingAvanceId(r._id!)}
+                            style={{ background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: 5, padding: "2px 8px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}
+                            title="Eliminar este avance">
+                            ✕
+                          </button>
+                        )}
+                      </div>
                     </div>
                     {r.tareasEjecutadas.length > 0 && (
                       <ul style={{ margin: "4px 0 6px 0", paddingLeft: 16 }}>
@@ -1385,6 +1397,49 @@ export default function ReporteOTPage() {
                   if (selected?._id === id) setSelected(null);
                 } else {
                   alert("Error al eliminar la OT");
+                }
+              }}
+              style={{ flex: 1, padding: "10px 0", borderRadius: 8, border: "none", background: "#dc2626", fontWeight: 700, fontSize: 14, cursor: "pointer", color: "white" }}
+            >
+              Eliminar
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    {/* Modal confirmación eliminar avance diario */}
+    {deletingAvanceId && selected && (
+      <div
+        style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+        onClick={() => setDeletingAvanceId(null)}
+      >
+        <div
+          style={{ background: "white", borderRadius: 12, padding: 28, maxWidth: 360, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div style={{ fontWeight: 800, fontSize: 16, color: "#0f2847", marginBottom: 8 }}>Eliminar avance diario</div>
+          <p style={{ fontSize: 14, color: "#475569", marginBottom: 20, lineHeight: 1.5 }}>
+            Se eliminará este registro de avance. Esta acción no se puede deshacer.
+          </p>
+          <div style={{ display: "flex", gap: 10 }}>
+            <button
+              onClick={() => setDeletingAvanceId(null)}
+              style={{ flex: 1, padding: "10px 0", borderRadius: 8, border: "1px solid #e2e8f0", background: "white", fontWeight: 600, fontSize: 14, cursor: "pointer", color: "#64748b" }}
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={async () => {
+                const avanceId = deletingAvanceId;
+                setDeletingAvanceId(null);
+                const res = await fetch(`/api/ordenes/${selected._id}/avances/${avanceId}`, { method: "DELETE" });
+                if (res.ok) {
+                  setSelected(prev => prev ? {
+                    ...prev,
+                    registrosDiarios: (prev.registrosDiarios ?? []).filter(r => r._id !== avanceId),
+                  } : prev);
+                } else {
+                  alert("Error al eliminar el avance");
                 }
               }}
               style={{ flex: 1, padding: "10px 0", borderRadius: 8, border: "none", background: "#dc2626", fontWeight: 700, fontSize: 14, cursor: "pointer", color: "white" }}
