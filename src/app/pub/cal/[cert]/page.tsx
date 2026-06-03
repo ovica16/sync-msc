@@ -66,7 +66,7 @@ function TablaPuntos({ puntos, unidad, titulo }: { puntos: PuntoCal[]; unidad?: 
                   <td style={{ padding: "6px 8px", textAlign: "center", fontFamily: "monospace" }}>{p.lecturaPatron}</td>
                   <td style={{ padding: "6px 8px", textAlign: "center", fontFamily: "monospace" }}>{p.lecturaInstrumento}</td>
                   <td style={{ padding: "6px 8px", textAlign: "center", fontFamily: "monospace", color: p.aprueba ? "#15803d" : "#b91c1c" }}>
-                    {p.error > 0 ? `+${p.error}` : p.error}{typeof errPct === "string" && errPct !== "—" ? ` (${errPct}%)` : ""}
+                    {p.error > 0 ? `+${p.error.toFixed(2)}` : p.error.toFixed(2)}{typeof errPct === "string" && errPct !== "—" ? ` (${errPct}%)` : ""}
                   </td>
                   <td style={{ padding: "6px 8px", textAlign: "center", fontFamily: "monospace", color: "#64748b" }}>±{p.tolerancia}</td>
                   <td style={{ padding: "6px 8px", textAlign: "center" }}>
