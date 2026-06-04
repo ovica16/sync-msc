@@ -222,13 +222,13 @@ function Dashboard({
 }) {
   const ESTADOS_ACTIVOS: EstadoOTProgramada[] = ["en_proceso", "en_revision", "completada"];
 
-  // Solo contar HH de días que ya ocurrieron (fecha UTC <= hoy local)
+  // Solo contar HH de días que ya terminaron (estrictamente antes de hoy)
   const hoy = new Date();
   const hoyStr = `${hoy.getFullYear()}-${String(hoy.getMonth()+1).padStart(2,"0")}-${String(hoy.getDate()).padStart(2,"0")}`;
   function diaPasado(dia: DiaSemana) {
     const f = fechasDias[dia];
     const fStr = f.toISOString().slice(0, 10);
-    return fStr <= hoyStr;
+    return fStr < hoyStr;
   }
 
   const ots = programa.otsProgramadas ?? [];
