@@ -640,7 +640,7 @@ export default function CalibracionPage() {
       })
       .catch(() => {});
 
-    fetch("/api/patrones")
+    fetch("/api/patrones?all=1")
       .then((r) => r.json())
       .then((d: PatronDoc[]) => setPatrones(d))
       .catch(() => {});
@@ -1393,6 +1393,7 @@ export default function CalibracionPage() {
                               )}
                               <span style={{ fontWeight: 700, fontSize: 13, color: "#0f2847" }}>{p.codigo}</span>
                               <span style={{ fontSize: 11, color: "#64748b" }}>{p.tipo}</span>
+                              {!p.activo && <span style={S.badge("#64748b")}>Inactivo</span>}
                               {vencido && <span style={S.badge("#dc2626")}>⚠ VENCIDO</span>}
                               {proximo && <span style={S.badge("#d97706")}>Próx. vencer</span>}
                             </div>
