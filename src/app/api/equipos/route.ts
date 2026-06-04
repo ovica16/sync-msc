@@ -72,6 +72,7 @@ export async function POST(req: NextRequest) {
             create: {
               codigo: String(eq.areaCodigo),
               nombre: String(eq.descripcionArea || eq.areaCodigo),
+              superintendencia: "",
             },
           });
         }
