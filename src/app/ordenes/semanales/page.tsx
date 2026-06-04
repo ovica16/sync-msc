@@ -20,6 +20,7 @@ const DIAS_CORTO: Record<DiaSemana, string> = {
   Vi: "VIE", Sa: "SAB", Do: "DOM",
 };
 const GRUPOS: GrupoTrabajo[] = ["G1", "G2", "G3", "G4", "Diurno", "Nocturno"];
+const AREAS_SEMANAL = new Set(["3310","3311","3312","3313","3315","3316","3318","3319","3320","3322","3338","3339","3343","3348","3351","3388"]);
 
 // Mapeo de areaCodigo → disciplina en MongoDB
 function areaToDisciplina(areaCodigo: string): string {
@@ -1308,10 +1309,11 @@ export default function SemanalesPage() {
       .then((r) => r.json())
       .then((data: IArea[]) => {
         if (!Array.isArray(data)) return;
-        // Admin/Superintendente ven todas; Supervisor/Planificador solo sus áreas asignadas
+        // Admin/Superintendente ven todas las áreas operativas; Supervisor/Planificador solo sus áreas
+        const operativas = data.filter((a) => AREAS_SEMANAL.has(a.codigo));
         const visible = (user.rol <= 2)
-          ? data
-          : data.filter((a) => user.areas.includes(a.codigo));
+          ? operativas
+          : operativas.filter((a) => user.areas.includes(a.codigo));
         if (visible.length === 0) return;
         setAreas(visible);
         // Priorizar el área del usuario; si no está en la lista, tomar la primera disponible
