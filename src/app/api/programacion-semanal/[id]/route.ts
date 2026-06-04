@@ -46,7 +46,8 @@ export async function PUT(req: NextRequest, { params }: Ctx) {
       return Response.json({ ok: false, error: "numeroOT y dia son requeridos" }, { status: 400 });
 
     await prisma.otProgramada.updateMany({
-      where: { programacionSemanalId: id, numeroOT, dia },
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      where: { programacionSemanalId: id, numeroOT, dia, grupo: body.grupo || undefined },
       data: {
         ...(estado             !== undefined ? { estado } : {}),
         ...(observaciones      !== undefined ? { observaciones } : {}),
