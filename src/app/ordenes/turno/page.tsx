@@ -540,7 +540,7 @@ export default function ReporteTurnoPage() {
                         style={{ fontSize: 11, color: "#64748b", fontWeight: 600, textDecoration: "none" }}>
                         🖨 PDF
                       </a>
-                      {user?.rol === 1 && (
+                      {user && Number(user.rol) <= 2 && (
                         <button
                           onClick={(e) => { e.stopPropagation(); abrirDetalle(r); }}
                           title="Editar reporte"
@@ -548,7 +548,7 @@ export default function ReporteTurnoPage() {
                           ✏ Editar
                         </button>
                       )}
-                      {user?.rol === 1 && (
+                      {user && Number(user.rol) === 1 && (
                         <button
                           onClick={(e) => eliminarReporte(e, r._id)}
                           title="Eliminar reporte"
