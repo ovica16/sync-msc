@@ -272,7 +272,7 @@ export default function ReporteOTPage() {
   }, [selected?._id]);
 
   const ordenesFiltradas = ordenes.filter((o) => {
-    // Técnico solo ve sus propias OTs
+    // Técnico/Contratista solo ve sus propias OTs
     if (esTecnico && user) {
       const tokensUser = user.nombre.toLowerCase().normalize("NFD").replace(/\p{Mn}/gu, "").split(/\s+/).filter(t => t.length > 2);
       const esAsignado = o.tecnicos.some(t => {
@@ -281,6 +281,10 @@ export default function ReporteOTPage() {
         return tokensUser.some(tok => nombreNorm.includes(tok));
       });
       if (!esAsignado) return false;
+    }
+    // Supervisor con áreas asignadas solo ve OTs de sus áreas
+    if (user && user.rol === 3 && user.areas && user.areas.length > 0) {
+      if (!user.areas.includes(o.areaCodigo)) return false;
     }
     if (!filtroBuscar) return true;
     const q = filtroBuscar.toLowerCase();
@@ -516,7 +520,10 @@ export default function ReporteOTPage() {
                   <label style={S.label}>Área</label>
                   <select value={filtroArea} onChange={(e) => setFiltroArea(e.target.value)} style={S.select}>
                     <option value="">Todas</option>
-                    {areas.map((a) => <option key={a.codigo} value={a.codigo}>{a.codigo} — {a.nombre}</option>)}
+                    {(user?.rol === 3 && user.areas?.length > 0
+                      ? areas.filter(a => user.areas.includes(a.codigo))
+                      : areas
+                    ).map((a) => <option key={a.codigo} value={a.codigo}>{a.codigo} — {a.nombre}</option>)}
                   </select>
                 </div>
               </div>
