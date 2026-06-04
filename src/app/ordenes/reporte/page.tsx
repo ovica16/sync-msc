@@ -231,6 +231,9 @@ export default function ReporteOTPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   // Eliminar avance diario (supervisor/admin)
   const [deletingAvanceId, setDeletingAvanceId] = useState<string | null>(null);
+  // Editar avance diario (supervisor/admin)
+  const [editingAvanceId, setEditingAvanceId] = useState<string | null>(null);
+  const [editAvanceForm, setEditAvanceForm] = useState<{ hhTrabajadas: number; tareasEjecutadas: string[]; observaciones: string; tareaInput: string }>({ hhTrabajadas: 0, tareasEjecutadas: [], observaciones: "", tareaInput: "" });
 
   // Avance diario (OTs multi-día)
   const [showAvance, setShowAvance]   = useState(false);
@@ -380,6 +383,39 @@ export default function ReporteOTPage() {
       setShowAvance(false);
       setAvanceForm({ fecha: new Date().toISOString().split("T")[0], hhTrabajadas: 0, tareasEjecutadas: [], observaciones: "" });
       setAvanceTareaInput("");
+    } catch (e: unknown) { setSaveErr(e instanceof Error ? e.message : "Error"); }
+    finally { setSaving(false); }
+  }
+
+  async function guardarEdicionAvance() {
+    if (!selected || !editingAvanceId) return;
+    if (editAvanceForm.hhTrabajadas <= 0) { setSaveErr("Ingrese las horas trabajadas"); return; }
+    const avance = selected.registrosDiarios?.find(r => r._id === editingAvanceId);
+    if (!avance) return;
+    setSaving(true); setSaveErr("");
+    try {
+      const res = await fetch(`/api/ordenes/${selected._id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          registroDiario: {
+            fecha:            avance.fecha,
+            tecnico:          avance.tecnico,
+            usuarioId:        avance.usuarioId,
+            hhTrabajadas:     editAvanceForm.hhTrabajadas,
+            tareasEjecutadas: editAvanceForm.tareasEjecutadas,
+            observaciones:    editAvanceForm.observaciones,
+          },
+          cambio: `Avance del día ${avance.fecha} editado por ${user?.nombre ?? "Supervisor"}`,
+          usuarioId: user?.id ?? "system",
+          nombreUsuario: user?.nombre ?? "Sistema",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Error al guardar");
+      setSelected(data.ot);
+      setOrdenes(prev => prev.map(o => o._id === data.ot._id ? data.ot : o));
+      setEditingAvanceId(null);
     } catch (e: unknown) { setSaveErr(e instanceof Error ? e.message : "Error"); }
     finally { setSaving(false); }
   }
@@ -1300,8 +1336,10 @@ export default function ReporteOTPage() {
               <p style={{ fontSize: 13, color: "#94a3b8", fontStyle: "italic" }}>Sin avances registrados aún. El técnico debe agregar el trabajo de cada día.</p>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {(ot.registrosDiarios ?? []).map((r, i) => (
-                  <div key={r._id ?? i} style={{ background: "#f8fafc", borderRadius: 10, border: "1px solid #e2e8f0", padding: "12px 14px", borderLeft: "3px solid #2563eb" }}>
+                {(ot.registrosDiarios ?? []).map((r, i) => {
+                  const isEditing = editingAvanceId === r._id;
+                  return (
+                  <div key={r._id ?? i} style={{ background: isEditing ? "#fffbeb" : "#f8fafc", borderRadius: 10, border: `1px solid ${isEditing ? "#fcd34d" : "#e2e8f0"}`, padding: "12px 14px", borderLeft: `3px solid ${isEditing ? "#f59e0b" : "#2563eb"}` }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
                       <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                         <span style={{ fontWeight: 800, fontSize: 13, color: "#0f2847" }}>
@@ -1309,9 +1347,20 @@ export default function ReporteOTPage() {
                         </span>
                         <span style={{ fontSize: 11, fontWeight: 700, background: "#dbeafe", color: "#1d4ed8", borderRadius: 4, padding: "2px 8px" }}>{r.hhTrabajadas}HH</span>
                       </div>
-                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                         <span style={{ fontSize: 11, color: "#94a3b8" }}>{r.tecnico}</span>
-                        {esSup && r._id && (
+                        {esSup && r._id && !isEditing && (
+                          <button
+                            onClick={() => {
+                              setEditingAvanceId(r._id!);
+                              setEditAvanceForm({ hhTrabajadas: r.hhTrabajadas, tareasEjecutadas: [...r.tareasEjecutadas], observaciones: r.observaciones ?? "", tareaInput: "" });
+                            }}
+                            style={{ background: "#fffbeb", color: "#d97706", border: "1px solid #fde68a", borderRadius: 5, padding: "2px 8px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}
+                            title="Editar este avance">
+                            ✏
+                          </button>
+                        )}
+                        {esSup && r._id && !isEditing && (
                           <button
                             onClick={() => setDeletingAvanceId(r._id!)}
                             style={{ background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: 5, padding: "2px 8px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}
@@ -1321,18 +1370,73 @@ export default function ReporteOTPage() {
                         )}
                       </div>
                     </div>
-                    {r.tareasEjecutadas.length > 0 && (
-                      <ul style={{ margin: "4px 0 6px 0", paddingLeft: 16 }}>
-                        {r.tareasEjecutadas.map((t, ti) => (
-                          <li key={ti} style={{ fontSize: 12, color: "#475569", lineHeight: 1.6 }}>{t}</li>
-                        ))}
-                      </ul>
-                    )}
-                    {r.observaciones && (
-                      <p style={{ fontSize: 12, color: "#94a3b8", fontStyle: "italic" }}>{r.observaciones}</p>
+
+                    {/* Formulario de edición inline */}
+                    {isEditing ? (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 8 }}>
+                        <div style={{ display: "grid", gridTemplateColumns: "120px 1fr", gap: 10 }}>
+                          <div>
+                            <label style={S.label}>HH trabajadas</label>
+                            <input type="number" min="0" step="0.5"
+                              value={editAvanceForm.hhTrabajadas || ""}
+                              onChange={e => setEditAvanceForm(f => ({ ...f, hhTrabajadas: Number(e.target.value) }))}
+                              style={S.input} />
+                          </div>
+                          <div>
+                            <label style={S.label}>Observaciones</label>
+                            <input type="text"
+                              value={editAvanceForm.observaciones}
+                              onChange={e => setEditAvanceForm(f => ({ ...f, observaciones: e.target.value }))}
+                              placeholder="Observaciones del día…"
+                              style={S.input} />
+                          </div>
+                        </div>
+                        <div>
+                          <label style={S.label}>Tareas ejecutadas</label>
+                          {editAvanceForm.tareasEjecutadas.map((t, ti) => (
+                            <div key={ti} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                              <span style={{ flex: 1, fontSize: 12, background: "white", borderRadius: 6, padding: "4px 8px", border: "1px solid #e2e8f0" }}>{t}</span>
+                              <button type="button"
+                                onClick={() => setEditAvanceForm(f => ({ ...f, tareasEjecutadas: f.tareasEjecutadas.filter((_, j) => j !== ti) }))}
+                                style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 13 }}>✕</button>
+                            </div>
+                          ))}
+                          <div style={{ display: "flex", gap: 6 }}>
+                            <input value={editAvanceForm.tareaInput}
+                              onChange={e => setEditAvanceForm(f => ({ ...f, tareaInput: e.target.value }))}
+                              onKeyDown={e => { if (e.key === "Enter" && editAvanceForm.tareaInput.trim()) { e.preventDefault(); setEditAvanceForm(f => ({ ...f, tareasEjecutadas: [...f.tareasEjecutadas, f.tareaInput.trim()], tareaInput: "" })); } }}
+                              placeholder="Nueva tarea — Enter para agregar"
+                              style={{ ...S.input, fontSize: 12 }} />
+                            <button type="button"
+                              onClick={() => { if (editAvanceForm.tareaInput.trim()) setEditAvanceForm(f => ({ ...f, tareasEjecutadas: [...f.tareasEjecutadas, f.tareaInput.trim()], tareaInput: "" })); }}
+                              style={{ ...S.btnGhost, padding: "6px 12px", fontSize: 12, whiteSpace: "nowrap" as const }}>+ Tarea</button>
+                          </div>
+                        </div>
+                        {saveErr && <p style={{ color: "#dc2626", fontSize: 12 }}>⚠ {saveErr}</p>}
+                        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                          <button onClick={() => { setEditingAvanceId(null); setSaveErr(""); }} style={{ ...S.btnGhost, padding: "6px 12px", fontSize: 12 }}>Cancelar</button>
+                          <button onClick={guardarEdicionAvance} disabled={saving} style={{ ...S.btnAmber, padding: "6px 14px", fontSize: 12, opacity: saving ? 0.6 : 1 }}>
+                            {saving ? "Guardando…" : "Guardar cambios"}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        {r.tareasEjecutadas.length > 0 && (
+                          <ul style={{ margin: "4px 0 6px 0", paddingLeft: 16 }}>
+                            {r.tareasEjecutadas.map((t, ti) => (
+                              <li key={ti} style={{ fontSize: 12, color: "#475569", lineHeight: 1.6 }}>{t}</li>
+                            ))}
+                          </ul>
+                        )}
+                        {r.observaciones && (
+                          <p style={{ fontSize: 12, color: "#94a3b8", fontStyle: "italic" }}>{r.observaciones}</p>
+                        )}
+                      </>
                     )}
                   </div>
-                ))}
+                  );
+                })}
                 {/* Totales */}
                 {totalDias > 1 && (
                   <div style={{ background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 8, padding: "10px 14px", display: "flex", gap: 24 }}>
