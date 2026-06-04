@@ -178,7 +178,7 @@ function diffLineas(original: Linea[], editado: Linea[]): string[] {
     const orig = original[i];
     if (!orig) return;
     if (linea.tiempoRealHrs !== orig.tiempoRealHrs) {
-      msgs.push(`[${linea.tag}] Tiempo real: ${orig.tiempoRealHrs ?? "—"}h → ${linea.tiempoRealHrs ?? "—"}h`);
+      msgs.push(`[${linea.tag}] HH trabajadas: ${orig.tiempoRealHrs ?? "—"}HH → ${linea.tiempoRealHrs ?? "—"}HH`);
     }
     if (linea.resolucionAplicada !== orig.resolucionAplicada) {
       msgs.push(`[${linea.tag}] Resolución actualizada`);
@@ -885,8 +885,8 @@ export default function ReporteOTPage() {
                 )}
                 {(l.tiempoEstimadoHrs || l.tiempoRealHrs) && (
                   <div style={{ display: "flex", gap: 12, marginTop: 3 }}>
-                    {l.tiempoEstimadoHrs && <span style={{ fontSize: 12, color: "#94a3b8" }}>Est: {l.tiempoEstimadoHrs}h</span>}
-                    {l.tiempoRealHrs && <span style={{ fontSize: 12, color: "#16a34a", fontWeight: 600 }}>Real: {l.tiempoRealHrs}h</span>}
+                    {l.tiempoEstimadoHrs && <span style={{ fontSize: 12, color: "#94a3b8" }}>Est: {l.tiempoEstimadoHrs}HH</span>}
+                    {l.tiempoRealHrs && <span style={{ fontSize: 12, color: "#16a34a", fontWeight: 600 }}>Real: {l.tiempoRealHrs}HH</span>}
                   </div>
                 )}
                 {l.observaciones && <p style={{ fontSize: 12, color: "#94a3b8", fontStyle: "italic", marginTop: 2 }}>{l.observaciones}</p>}
@@ -937,7 +937,7 @@ export default function ReporteOTPage() {
 
                   {/* Tiempo real */}
                   <div style={{ marginBottom: 12 }}>
-                    <label style={{ ...S.label, marginBottom: 3 }}>Tiempo real (h)</label>
+                    <label style={{ ...S.label, marginBottom: 3 }}>HH Trabajadas <span style={{ fontWeight: 400, textTransform: "none" as const }}>(personas × horas)</span></label>
                     <input
                       type="number" min="0" step="0.5"
                       value={l.tiempoRealHrs ?? ""}
@@ -945,7 +945,7 @@ export default function ReporteOTPage() {
                       style={S.inputSm}
                     />
                     {ot.lineas[i].tiempoRealHrs !== undefined && (
-                      <p style={{ fontSize: 10, color: "#94a3b8", marginTop: 2 }}>Orig: {ot.lineas[i].tiempoRealHrs}h</p>
+                      <p style={{ fontSize: 10, color: "#94a3b8", marginTop: 2 }}>Orig: {ot.lineas[i].tiempoRealHrs}HH</p>
                     )}
                   </div>
 

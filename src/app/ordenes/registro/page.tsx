@@ -834,7 +834,7 @@ function LineaEditor({
               <input type="number" min="0" step="0.5" value={L.tiempoEstimadoHrs} onChange={e => patch({ tiempoEstimadoHrs: e.target.value })} style={S.input} />
             </div>
             <div>
-              <label style={S.label}>Tiempo real (hrs) *</label>
+              <label style={S.label}>HH Trabajadas * <span style={{ fontWeight: 400, textTransform: "none" as const }}>(personas × horas)</span></label>
               <input type="number" min="0" step="0.5" value={L.tiempoRealHrs} onChange={e => patch({ tiempoRealHrs: e.target.value })} style={S.input} />
             </div>
           </div>
@@ -883,7 +883,7 @@ function LineaEditor({
               <input type="number" min="0" step="0.5" value={L.tiempoEstimadoHrs} onChange={e => patch({ tiempoEstimadoHrs: e.target.value })} style={S.input} />
             </div>
             <div>
-              <label style={S.label}>Tiempo real (hrs) *</label>
+              <label style={S.label}>HH Trabajadas * <span style={{ fontWeight: 400, textTransform: "none" as const }}>(personas × horas)</span></label>
               <input type="number" min="0" step="0.5" value={L.tiempoRealHrs} onChange={e => patch({ tiempoRealHrs: e.target.value })} style={S.input} />
             </div>
           </div>
@@ -916,7 +916,7 @@ function LineaEditor({
           </div>
           <div style={{ display: "flex", gap: 10, alignItems: "flex-end", marginBottom: 13 }}>
             <div style={{ flex: "0 0 155px" }}>
-              <label style={S.label}>Tiempo real (hrs)</label>
+              <label style={S.label}>HH Trabajadas <span style={{ fontWeight: 400, textTransform: "none" as const }}>(personas × horas)</span></label>
               <input type="number" min="0" step="0.5" value={L.tiempoRealHrs} onChange={e => patch({ tiempoRealHrs: e.target.value })} style={S.input} />
             </div>
             {aplicaChecklist(L.nivel, L.disciplina, L.tipoOT) && (() => {
@@ -1984,7 +1984,7 @@ export default function RegistroOTPage() {
                           <p style={{ fontSize: 12, color: "#64748b", marginBottom: 2 }}>{l.descripcionEquipo}</p>
                           {isCorrectivo(l.tipoOT) && l.sintoma && <p style={{ fontSize: 12, color: "#475569" }}>{l.sintoma}{l.causaProbable ? ` → ${l.causaProbable}` : ""}</p>}
                           {isPreventivo(l.tipoOT) && l.descripcionTrabajo && <p style={{ fontSize: 12, color: "#475569" }}>{l.descripcionTrabajo}</p>}
-                          {l.tiempoRealHrs && <p style={{ fontSize: 12, color: "#16a34a", fontWeight: 600, marginTop: 2 }}>⏱ {l.tiempoRealHrs} hrs reales</p>}
+                          {l.tiempoRealHrs && <p style={{ fontSize: 12, color: "#16a34a", fontWeight: 600, marginTop: 2 }}>⏱ {l.tiempoRealHrs} HH</p>}
                         </div>
                         <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
                           <button type="button" onClick={() => openEdit(idx)} disabled={!!editLinea}
@@ -2066,7 +2066,7 @@ export default function RegistroOTPage() {
                           {l.resolucionAplicada && <p style={{ fontSize: 12, color: "#475569" }}>Resolución: {l.resolucionAplicada}</p>}
                           <div style={{ display: "flex", gap: 12, marginTop: 2 }}>
                             {l.tiempoEstimadoHrs && <span style={{ fontSize: 12, color: "#94a3b8" }}>Est: {l.tiempoEstimadoHrs}h</span>}
-                            {l.tiempoRealHrs && <span style={{ fontSize: 12, color: "#16a34a", fontWeight: 600 }}>Real: {l.tiempoRealHrs}h</span>}
+                            {l.tiempoRealHrs && <span style={{ fontSize: 12, color: "#16a34a", fontWeight: 600 }}>Real: {l.tiempoRealHrs}HH</span>}
                           </div>
                         </>
                       )}
