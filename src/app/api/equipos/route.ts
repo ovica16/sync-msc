@@ -76,14 +76,16 @@ export async function POST(req: NextRequest) {
             },
           });
         }
-        const { descripcionArea: _da, ...eqData } = eq as Record<string, unknown>;
-        void _da;
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { descripcionArea, ...eqData } = eq as Record<string, unknown>;
         const existing = await prisma.equipo.findUnique({ where: { tag } });
         if (existing) {
-          await prisma.equipo.update({ where: { tag }, data: eqData });
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await prisma.equipo.update({ where: { tag }, data: eqData as any });
           modified++;
         } else {
-          await prisma.equipo.create({ data: { ...eqData, tag } });
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await prisma.equipo.create({ data: { ...(eqData as any), tag } });
           inserted++;
         }
       }
