@@ -57,6 +57,7 @@ export async function PUT(req: NextRequest, { params }: Ctx) {
         ...(observaciones      !== undefined ? { observaciones } : {}),
         ...(personalAsignado    !== undefined ? { personalAsignado } : {}),
         ...(personalAsignadoIds !== undefined ? { personalAsignadoIds } : {}),
+        ...(body.nuevoGrupo ? { grupo: String(body.nuevoGrupo) } : {}),
         ...(pasarNoche         !== undefined ? {
           pasarNoche,
           pasarNocheMotivo: pasarNocheMotivo ?? "",

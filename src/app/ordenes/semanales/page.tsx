@@ -351,6 +351,7 @@ function AsignarTecnicosModal({
 }) {
   const [tecnicos, setTecnicos] = useState<{ _id: string; nombre: string }[]>([]);
   const [seleccionados, setSeleccionados] = useState<string[]>(ot.personalAsignado ?? []);
+  const [grupoEdit, setGrupoEdit] = useState<string>(ot.grupo ?? "Diurno");
   const [busqueda, setBusqueda] = useState("");
   const [saving, setSaving] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -383,7 +384,7 @@ function AsignarTecnicosModal({
     const res = await fetch(`/api/programacion-semanal/${programaId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ numeroOT: ot.numeroOT, dia: ot.dia, personalAsignado: seleccionados, personalAsignadoIds: ids }),
+      body: JSON.stringify({ numeroOT: ot.numeroOT, dia: ot.dia, grupo: ot.grupo, personalAsignado: seleccionados, personalAsignadoIds: ids, ...(grupoEdit !== ot.grupo ? { nuevoGrupo: grupoEdit } : {}) }),
     });
     const data = await res.json();
     setSaving(false);
@@ -415,6 +416,25 @@ function AsignarTecnicosModal({
             </p>
           </div>
           <button onClick={onClose} style={{ background: "none", border: "1px solid #e2e8f0", borderRadius: 6, width: 30, height: 30, cursor: "pointer", fontSize: 14, color: "#64748b" }}>✕</button>
+        </div>
+
+        {/* Cambiar grupo (Diurno/Nocturno/G1...) */}
+        <div style={{ marginBottom: 10 }}>
+          <label style={{ fontSize: 11, fontWeight: 700, color: "#64748b", letterSpacing: "0.06em", textTransform: "uppercase" as const, display: "block", marginBottom: 4 }}>
+            Grupo / Turno
+          </label>
+          <select
+            value={grupoEdit}
+            onChange={e => setGrupoEdit(e.target.value)}
+            style={{ width: "100%", padding: "7px 10px", borderRadius: 8, border: "1.5px solid #e2e8f0", fontSize: 13, background: grupoEdit !== ot.grupo ? "#fffbeb" : "white", fontWeight: grupoEdit !== ot.grupo ? 700 : 400 }}
+          >
+            {["G1","G2","G3","G4","Diurno","Nocturno"].map(g => (
+              <option key={g} value={g}>{g}</option>
+            ))}
+          </select>
+          {grupoEdit !== ot.grupo && (
+            <p style={{ fontSize: 11, color: "#d97706", marginTop: 3 }}>⚠ Cambiará de <b>{ot.grupo}</b> → <b>{grupoEdit}</b></p>
+          )}
         </div>
 
         <input
