@@ -3,8 +3,8 @@ import { NextRequest } from "next/server";
 
 const DIURNO  = ["Cordova Ramos Felix", "José Quispe"];
 const NOCTURNO = ["Valencia Camata Edgar", "Taquichiri Mamani Sabino"];
+const DIAS_TURNERO = ["Ju", "Vi", "Sa", "Do"];
 
-// GET: preview de las correcciones que se van a aplicar
 export async function GET(_req: NextRequest) {
   const plan = await prisma.programacionSemanal.findFirst({
     where: { semana: 23, anio: 2026 },
@@ -19,23 +19,22 @@ export async function GET(_req: NextRequest) {
   if (!plan) return Response.json({ error: "Plan semana 23/2026 no encontrado" });
 
   const corrections = plan.otsProgramadas
-    .filter(o => ["Ju", "Sa", "Do"].includes(o.dia))
+    .filter(o => DIAS_TURNERO.includes(o.dia))
     .map(o => {
       const expected = o.grupo === "Diurno" ? DIURNO : NOCTURNO;
-      const needsFix = JSON.stringify(o.personalAsignado.sort()) !== JSON.stringify([...expected].sort());
+      const needsFix = JSON.stringify([...o.personalAsignado].sort()) !== JSON.stringify([...expected].sort());
       return { id: o.id, dia: o.dia, grupo: o.grupo, actual: o.personalAsignado, correcto: expected, needsFix };
     });
 
   return Response.json({ planId: plan.id, corrections });
 }
 
-// POST: aplica las correcciones
 export async function POST(_req: NextRequest) {
   const plan = await prisma.programacionSemanal.findFirst({
     where: { semana: 23, anio: 2026 },
     include: {
       otsProgramadas: {
-        where: { numeroOT: "892867", dia: { in: ["Ju", "Sa", "Do"] } },
+        where: { numeroOT: "892867", dia: { in: DIAS_TURNERO } },
         select: { id: true, dia: true, grupo: true },
       },
     },
@@ -51,6 +50,5 @@ export async function POST(_req: NextRequest) {
       })
     )
   );
-
   return Response.json({ ok: true, updated: results });
 }
