@@ -542,6 +542,14 @@ export default function ReporteTurnoPage() {
                       </a>
                       {user?.rol === 1 && (
                         <button
+                          onClick={(e) => { e.stopPropagation(); abrirDetalle(r); }}
+                          title="Editar reporte"
+                          style={{ fontSize: 11, color: "#d97706", background: "none", border: "1px solid #fde68a", borderRadius: 5, padding: "2px 8px", cursor: "pointer", fontWeight: 600 }}>
+                          ✏ Editar
+                        </button>
+                      )}
+                      {user?.rol === 1 && (
+                        <button
                           onClick={(e) => eliminarReporte(e, r._id)}
                           title="Eliminar reporte"
                           style={{ fontSize: 11, color: "#dc2626", background: "none", border: "1px solid #fecaca", borderRadius: 5, padding: "2px 8px", cursor: "pointer", fontWeight: 600 }}>
