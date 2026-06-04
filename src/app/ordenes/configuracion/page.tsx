@@ -1467,6 +1467,7 @@ function AreasTab() {
   const [items, setItems] = useState<AreaItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<AreaForm>({ codigo: "", nombre: "", superintendencia: "", tieneCalibracion: false });
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
@@ -1479,20 +1480,36 @@ function AreasTab() {
 
   useEffect(() => { load(); }, [load]);
 
+  function openAdd() { setEditingId(null); setForm({ codigo: "", nombre: "", superintendencia: "", tieneCalibracion: false }); setErr(""); setShowForm(true); }
+  function openEdit(item: AreaItem) { setEditingId(item._id); setForm({ codigo: item.codigo, nombre: item.nombre, superintendencia: item.superintendencia, tieneCalibracion: item.tieneCalibracion }); setErr(""); setShowForm(true); }
+
   async function save() {
     if (!form.codigo || !form.nombre || !form.superintendencia) { setErr("Código, nombre y superintendencia son obligatorios"); return; }
     setSaving(true); setErr("");
-    const res = await fetch("/api/areas", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
+    let res;
+    if (editingId) {
+      res = await fetch(`/api/areas/${editingId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
+    } else {
+      res = await fetch("/api/areas", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
+    }
     const data = await res.json();
     setSaving(false);
     if (!data.ok) { setErr(data.error ?? "Error al guardar"); return; }
-    setShowForm(false);
+    setShowForm(false); setEditingId(null);
     setForm({ codigo: "", nombre: "", superintendencia: "", tieneCalibracion: false });
     load();
   }
 
   async function toggleActivo(item: AreaItem) {
     await fetch(`/api/areas/${item._id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activo: !item.activo }) });
+    load();
+  }
+
+  async function eliminar(item: AreaItem) {
+    if (!confirm(`¿Eliminar área ${item.codigo} — ${item.nombre}? Esta acción no se puede deshacer.`)) return;
+    const res = await fetch(`/api/areas/${item._id}`, { method: "DELETE" });
+    const data = await res.json();
+    if (!data.ok) { alert(data.error ?? "No se pudo eliminar. Puede tener equipos u OTs asociados."); return; }
     load();
   }
 
@@ -1535,16 +1552,16 @@ function AreasTab() {
           </p>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button style={C.btnBlue} onClick={() => { setErr(""); setShowForm((s) => !s); }}>+ Agregar</button>
+          <button style={C.btnBlue} onClick={openAdd}>+ Agregar</button>
           <BulkImportPanel entityName="Áreas" fileName="plantilla_areas.csv" fields={AREA_FIELDS} templateRows={AREA_TEMPLATE} onImport={importarFilas} />
         </div>
       </div>
 
       {showForm && (
         <div style={C.formBox}>
-          <h3 style={{ margin: "0 0 16px", fontSize: 14, fontWeight: 700, color: "#0f2847" }}>Nueva Área</h3>
+          <h3 style={{ margin: "0 0 16px", fontSize: 14, fontWeight: 700, color: "#0f2847" }}>{editingId ? "Editar Área" : "Nueva Área"}</h3>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr 2fr", gap: "12px 16px", alignItems: "end" }}>
-            <div><label style={C.label}>Código JDE *</label><input style={C.input} value={form.codigo} onChange={(e) => setForm((f) => ({ ...f, codigo: e.target.value }))} placeholder="Ej: 3322" /></div>
+            <div><label style={C.label}>Código JDE *</label><input style={C.input} value={form.codigo} onChange={(e) => setForm((f) => ({ ...f, codigo: e.target.value }))} placeholder="Ej: 3322" disabled={!!editingId} /></div>
             <div><label style={C.label}>Nombre *</label><input style={C.input} value={form.nombre} onChange={(e) => setForm((f) => ({ ...f, nombre: e.target.value }))} placeholder="Ej: Mecánica Taller Central" /></div>
             <div><label style={C.label}>Superintendencia *</label><input style={C.input} value={form.superintendencia} onChange={(e) => setForm((f) => ({ ...f, superintendencia: e.target.value }))} placeholder="Ej: Mecánica" /></div>
             <div style={{ gridColumn: "span 3" }}>
@@ -1556,8 +1573,8 @@ function AreasTab() {
           </div>
           <ErrMsg msg={err} />
           <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
-            <button style={C.btnBlue} onClick={save} disabled={saving}>{saving ? "Guardando…" : "Crear área"}</button>
-            <button style={C.btnOutline} onClick={() => setShowForm(false)}>Cancelar</button>
+            <button style={C.btnBlue} onClick={save} disabled={saving}>{saving ? "Guardando…" : editingId ? "Guardar cambios" : "Crear área"}</button>
+            <button style={C.btnOutline} onClick={() => { setShowForm(false); setEditingId(null); }}>Cancelar</button>
           </div>
         </div>
       )}
@@ -1569,7 +1586,7 @@ function AreasTab() {
               <tr>
                 <th style={{ ...C.th, width: 80 }}>Código</th><th style={C.th}>Nombre</th>
                 <th style={C.th}>Superintendencia</th><th style={{ ...C.th, width: 90 }}>Calibración</th>
-                <th style={{ ...C.th, width: 80 }}>Estado</th><th style={{ ...C.th, width: 90 }}></th>
+                <th style={{ ...C.th, width: 80 }}>Estado</th><th style={{ ...C.th, width: 150 }}></th>
               </tr>
             </thead>
             <tbody>
@@ -1580,7 +1597,11 @@ function AreasTab() {
                   <td style={{ ...C.td, color: "#475569" }}>{item.superintendencia}</td>
                   <td style={C.td}>{item.tieneCalibracion ? <Badge bg="#dbeafe" color="#1d4ed8">Sí</Badge> : <span style={{ color: "#cbd5e1" }}>—</span>}</td>
                   <td style={C.td}><Badge bg={item.activo ? "#dcfce7" : "#f1f5f9"} color={item.activo ? "#16a34a" : "#94a3b8"}>{item.activo ? "Activo" : "Inactivo"}</Badge></td>
-                  <td style={C.td}><button style={item.activo ? C.btnRed : C.btnGreen} onClick={() => toggleActivo(item)}>{item.activo ? "Desactivar" : "Activar"}</button></td>
+                  <td style={C.td}>
+                    <button style={{ ...C.btnSmall, marginRight: 4 }} onClick={() => openEdit(item)}>Editar</button>
+                    <button style={{ ...item.activo ? C.btnRed : C.btnGreen, marginRight: 4 }} onClick={() => toggleActivo(item)}>{item.activo ? "Desactivar" : "Activar"}</button>
+                    <button style={{ ...C.btnSmall, background: "#fee2e2", color: "#dc2626", border: "1px solid #fca5a5" }} onClick={() => eliminar(item)}>Eliminar</button>
+                  </td>
                 </tr>
               ))}
             </tbody>

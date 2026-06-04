@@ -20,6 +20,11 @@ export async function PUT(req: NextRequest, { params }: Ctx) {
 
 export async function DELETE(_req: NextRequest, { params }: Ctx) {
   const { id } = await params;
-  await prisma.area.update({ where: { codigo: id }, data: { activo: false } });
-  return Response.json({ ok: true });
+  try {
+    await prisma.area.delete({ where: { codigo: id } });
+    return Response.json({ ok: true });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Error interno";
+    return Response.json({ ok: false, error: message }, { status: 400 });
+  }
 }
