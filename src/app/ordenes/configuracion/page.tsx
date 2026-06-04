@@ -96,7 +96,7 @@ const ROL_CLR: Record<number, { bg: string; color: string }> = {
 };
 
 // ─── CSV utilities ─────────────────────────────────────────────────────────────
-function splitCSVLine(line: string): string[] {
+function splitCSVLine(line: string, sep: string): string[] {
   const result: string[] = [];
   let cur = "";
   let inQ = false;
@@ -105,7 +105,7 @@ function splitCSVLine(line: string): string[] {
     if (ch === '"') {
       if (inQ && line[i + 1] === '"') { cur += '"'; i++; }
       else inQ = !inQ;
-    } else if (ch === "," && !inQ) { result.push(cur); cur = ""; }
+    } else if (ch === sep && !inQ) { result.push(cur); cur = ""; }
     else cur += ch;
   }
   result.push(cur);
@@ -115,9 +115,12 @@ function splitCSVLine(line: string): string[] {
 function parseCSVText(text: string): Record<string, string>[] {
   const lines = text.split(/\r?\n/).filter((l) => l.trim());
   if (lines.length < 2) return [];
-  const headers = splitCSVLine(lines[0]).map((h) => h.trim().replace(/^"|"$/g, ""));
+  // Auto-detect separator: use ";" if the first line has more semicolons than commas
+  const firstLine = lines[0];
+  const sep = (firstLine.split(";").length > firstLine.split(",").length) ? ";" : ",";
+  const headers = splitCSVLine(firstLine, sep).map((h) => h.trim().replace(/^"|"$/g, ""));
   return lines.slice(1).map((line) => {
-    const vals = splitCSVLine(line);
+    const vals = splitCSVLine(line, sep);
     return Object.fromEntries(headers.map((h, i) => [h, (vals[i] ?? "").trim()]));
   });
 }
