@@ -281,7 +281,7 @@ export default function PrintClientTecnico({
                         {l.descripcion && <div>{l.descripcion}</div>}
                         {l.resolucion  && <div style={{ color: "#16a34a", fontStyle: "italic" }}>✓ {l.resolucion}</div>}
                       </td>
-                      <td colSpan={2} style={{ fontSize: 7, color: "#64748b" }}>{ot.tecnicos.join(", ")}</td>
+                      <td colSpan={2} style={{ fontSize: 7, color: "#64748b" }}></td>
                     </tr>
                   )),
                 ];
