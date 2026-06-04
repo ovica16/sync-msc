@@ -503,10 +503,11 @@ function EquiposTab() {
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
-      const tag = (row["Nº unidad"] || row["tag"] || "").toString().toUpperCase().trim();
+      // Keys are normalized to lowercase+no-diacritics by normalizeRowKeys
+      const tag = (row["nº unidad"] || row["no unidad"] || row["tag"] || "").toString().toUpperCase().trim();
       if (!tag || tag === ".") { failed.push(`Fila ${i + 2}: TAG vacío`); continue; }
 
-      const nivelStr = (row["Nivel"] || row["nivel"] || "").toString().trim();
+      const nivelStr = (row["nivel"] || "").toString().trim();
       const nivelMatch = nivelStr.match(/(\d+)$/);
       const nivel = nivelMatch ? parseInt(nivelMatch[1], 10) : 4;
 
@@ -516,32 +517,32 @@ function EquiposTab() {
       const nivelPath: string[] = [];
       for (let n = 1; n < nivel; n++) { if (parentStack[n]) nivelPath.push(parentStack[n]); }
 
-      const areaCodigo = (row["Area"] || row["areaCodigo"] || "0").toString().trim();
-      const criticidad = (row["Crit"] || row["criticidad"] || "").toString().trim().toUpperCase();
-      const tipo       = (row["Tipo"] || row["tipoEquipo"] || ".").toString().trim();
-      const descTipo   = (row["Descripción Tipo"] || row["descripcionTipo"] || "").toString().trim();
-      const subtipo    = (row["SubTipo"] || row["subtipo"] || "").toString().trim();
-      const descSub    = (row["Descripción SubTipo"] || row["descripcionSubtipo"] || "").toString().trim();
+      const areaCodigo = (row["area"] || row["areaCodigo"] || "0").toString().trim();
+      const criticidad = (row["crit"] || row["criticidad"] || "").toString().trim().toUpperCase();
+      const tipo       = (row["tipo"] || row["tipoequipo"] || ".").toString().trim();
+      const descTipo   = (row["descripcion tipo"] || row["descripciontipo"] || "").toString().trim();
+      const subtipo    = (row["subtipo"] || "").toString().trim();
+      const descSub    = (row["descripcion subtipo"] || row["descripcionsubtipo"] || "").toString().trim();
 
       const eq: Record<string, unknown> = {
         tag, nivel, areaCodigo,
-        descripcion: (row["Descripción"] || row["descripcion"] || tag).toString().trim(),
+        descripcion: (row["descripcion"] || tag).toString().trim(),
         tipoEquipo: tipo === "." || !tipo ? "." : tipo,
         activo: true,
       };
       if (parentTag)          eq.parentTag = parentTag;
       if (nivelPath.length)   eq.nivelPath = nivelPath;
-      const d2 = (row["Descripción 2"] || row["descripcion2"] || "").toString().trim();
-      const d3 = (row["Descripción 3"] || row["descripcion3"] || "").toString().trim();
+      const d2 = (row["descripcion 2"] || row["descripcion2"] || "").toString().trim();
+      const d3 = (row["descripcion 3"] || row["descripcion3"] || "").toString().trim();
       if (d2 && d2 !== ".")  eq.descripcion2 = d2;
       if (d3 && d3 !== ".")  eq.descripcion3 = d3;
       if (descTipo && descTipo !== ".")  eq.descripcionTipo = descTipo;
       if (subtipo && subtipo !== ".")    eq.subtipo = subtipo;
       if (descSub && descSub !== ".")    eq.descripcionSubtipo = descSub;
       if (["A","B","C"].includes(criticidad)) eq.criticidad = criticidad;
-      const ccosto = (row["Ccosto"] || row["centroCosto"] || "").toString().trim();
+      const ccosto = (row["ccosto"] || row["centrocosto"] || "").toString().trim();
       if (ccosto) eq.centroCosto = ccosto;
-      const descArea = (row["Descripción Area"] || row["descripcionArea"] || "").toString().trim();
+      const descArea = (row["descripcion area"] || row["descripcionarea"] || "").toString().trim();
       if (descArea) eq.descripcionArea = descArea;
 
       equipos.push(eq);
