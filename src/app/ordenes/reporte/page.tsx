@@ -565,20 +565,22 @@ export default function ReporteOTPage() {
                       <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, flexShrink: 0 }}>
                         <span style={{ fontSize: 11, color: "#94a3b8" }}>{ot.lineas.length} equipo(s)</span>
                         <span style={{ fontSize: 12, color: "#2563eb", fontWeight: 600 }}>Ver →</span>
-                        {esAdmin && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelected(null);
-                              setDeletingId(ot._id);
-                            }}
-                            style={{ fontSize: 11, color: "#dc2626", fontWeight: 600, background: "none", border: "none", cursor: "pointer", padding: 0 }}
-                          >
-                            Eliminar
-                          </button>
-                        )}
                       </div>
                     </div>
+                    {esAdmin && (
+                      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10, paddingTop: 8, borderTop: "1px solid #fee2e2" }}>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelected(null);
+                            setDeletingId(ot._id);
+                          }}
+                          style={{ fontSize: 11, color: "#dc2626", fontWeight: 600, background: "none", border: "1px solid #fecaca", borderRadius: 6, cursor: "pointer", padding: "3px 10px" }}
+                        >
+                          🗑 Eliminar OT
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               })
