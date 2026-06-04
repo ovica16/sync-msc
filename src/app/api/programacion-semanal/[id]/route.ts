@@ -45,8 +45,9 @@ export async function PUT(req: NextRequest, { params }: Ctx) {
     if (!numeroOT || !dia)
       return Response.json({ ok: false, error: "numeroOT y dia son requeridos" }, { status: 400 });
 
+    const grupoFiltro: string | undefined = body.grupo;
     await prisma.otProgramada.updateMany({
-      where: { programacionSemanalId: id, numeroOT, dia },
+      where: { programacionSemanalId: id, numeroOT, dia, ...(grupoFiltro ? { grupo: grupoFiltro } : {}) },
       data: {
         ...(estado             !== undefined ? { estado } : {}),
         ...(observaciones      !== undefined ? { observaciones } : {}),
