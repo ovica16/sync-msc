@@ -1358,11 +1358,12 @@ export default function CalibracionPage() {
                 )}
 
                 {(() => {
+                  const vigentes = patrones.filter((p) => !isVencido(p.fechaVencimiento));
                   const display = (!form.tipoVariable || form.tipoVariable === "Otro")
-                    ? patrones
+                    ? vigentes
                     : (() => {
-                        const f = patrones.filter((p) => p.tipo === form.tipoVariable || p.tipo === "Multifunción");
-                        return f.length > 0 ? f : patrones;
+                        const f = vigentes.filter((p) => p.tipo === form.tipoVariable || p.tipo === "Multifunción");
+                        return f.length > 0 ? f : vigentes;
                       })();
                   return display.map((p, idx) => {
                     const vencido = isVencido(p.fechaVencimiento);
