@@ -42,6 +42,10 @@ interface CambioHistorial {
   cambio: string;
 }
 
+interface RegistroDiario {
+  hhTrabajadas: number;
+}
+
 interface OTData {
   numeroOT?: string;
   otJdeNumero?: string;
@@ -51,6 +55,7 @@ interface OTData {
   estado: string;
   tecnicos: TecnicoRef[];
   lineas: LineaOT[];
+  registrosDiarios?: RegistroDiario[];
   datosSupervision?: DatosSupervision;
   historialCambios?: CambioHistorial[];
 }
@@ -390,7 +395,9 @@ export async function generarInformeOT(ot: OTData): Promise<void> {
   y += 14;
 
   const totalEst  = ot.lineas.reduce((s, l) => s + (l.tiempoEstimadoHrs ?? 0), 0);
-  const totalReal = ot.lineas.reduce((s, l) => s + (l.tiempoRealHrs ?? 0), 0);
+  const hhLineas  = ot.lineas.reduce((s, l) => s + (l.tiempoRealHrs ?? 0), 0);
+  const hhDiarios = (ot.registrosDiarios ?? []).reduce((s, r) => s + (r.hhTrabajadas ?? 0), 0);
+  const totalReal = hhLineas + hhDiarios;
   const diff      = Math.round((totalReal - totalEst) * 10) / 10;
   const pct       = totalEst > 0 ? Math.round((totalReal / totalEst) * 100) : 0;
 
