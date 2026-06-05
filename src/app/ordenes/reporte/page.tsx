@@ -177,6 +177,9 @@ function diffLineas(original: Linea[], editado: Linea[]): string[] {
   editado.forEach((linea, i) => {
     const orig = original[i];
     if (!orig) return;
+    if (linea.tiempoEstimadoHrs !== orig.tiempoEstimadoHrs) {
+      msgs.push(`[${linea.tag}] HH estimadas: ${orig.tiempoEstimadoHrs ?? "—"}HH → ${linea.tiempoEstimadoHrs ?? "—"}HH`);
+    }
     if (linea.tiempoRealHrs !== orig.tiempoRealHrs) {
       msgs.push(`[${linea.tag}] HH trabajadas: ${orig.tiempoRealHrs ?? "—"}HH → ${linea.tiempoRealHrs ?? "—"}HH`);
     }
@@ -956,18 +959,32 @@ export default function ReporteOTPage() {
                     <span style={{ fontSize: 11, color: "#64748b" }}>{l.descripcionEquipo}</span>
                   </div>
 
-                  {/* Tiempo real */}
-                  <div style={{ marginBottom: 12 }}>
-                    <label style={{ ...S.label, marginBottom: 3 }}>HH Trabajadas <span style={{ fontWeight: 400, textTransform: "none" as const }}>(personas × horas)</span></label>
-                    <input
-                      type="number" min="0" step="0.5"
-                      value={l.tiempoRealHrs ?? ""}
-                      onChange={(e) => patchLinea(i, { tiempoRealHrs: e.target.value ? Number(e.target.value) : undefined })}
-                      style={S.inputSm}
-                    />
-                    {ot.lineas[i].tiempoRealHrs !== undefined && (
-                      <p style={{ fontSize: 10, color: "#94a3b8", marginTop: 2 }}>Orig: {ot.lineas[i].tiempoRealHrs}HH</p>
-                    )}
+                  {/* Tiempo estimado + real */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+                    <div>
+                      <label style={{ ...S.label, marginBottom: 3 }}>HH Estimadas</label>
+                      <input
+                        type="number" min="0" step="0.5"
+                        value={l.tiempoEstimadoHrs ?? ""}
+                        onChange={(e) => patchLinea(i, { tiempoEstimadoHrs: e.target.value ? Number(e.target.value) : undefined })}
+                        style={S.inputSm}
+                      />
+                      {ot.lineas[i].tiempoEstimadoHrs !== undefined && (
+                        <p style={{ fontSize: 10, color: "#94a3b8", marginTop: 2 }}>Orig: {ot.lineas[i].tiempoEstimadoHrs}HH</p>
+                      )}
+                    </div>
+                    <div>
+                      <label style={{ ...S.label, marginBottom: 3 }}>HH Trabajadas <span style={{ fontWeight: 400, textTransform: "none" as const }}>(personas × horas)</span></label>
+                      <input
+                        type="number" min="0" step="0.5"
+                        value={l.tiempoRealHrs ?? ""}
+                        onChange={(e) => patchLinea(i, { tiempoRealHrs: e.target.value ? Number(e.target.value) : undefined })}
+                        style={S.inputSm}
+                      />
+                      {ot.lineas[i].tiempoRealHrs !== undefined && (
+                        <p style={{ fontSize: 10, color: "#94a3b8", marginTop: 2 }}>Orig: {ot.lineas[i].tiempoRealHrs}HH</p>
+                      )}
+                    </div>
                   </div>
 
                   {/* Síntoma / Causa / Resolución — CMP y CMR (correctivos) */}
