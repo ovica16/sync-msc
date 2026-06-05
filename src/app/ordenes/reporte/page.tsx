@@ -1,9 +1,6 @@
 "use client";
 
-export const dynamic = "force-dynamic";
-
 import React, { useState, useEffect, useCallback } from "react";
-import { useSearchParams } from "next/navigation";
 import AppHeader from "@/components/AppHeader";
 import { useUser } from "@/context/AuthContext";
 import { generarInformeOT } from "@/lib/generarInformeOT";
@@ -197,8 +194,11 @@ function diffLineas(original: Linea[], editado: Linea[]): string[] {
 
 export default function ReporteOTPage() {
   const { user } = useUser();
-  const searchParams = useSearchParams();
-  const otParamId = searchParams.get("ot");
+  const [otParamId, setOtParamId] = useState<string | null>(null);
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search).get("ot");
+    setOtParamId(p);
+  }, []);
 
   // Derivados de rol — Admin(1) y Superintendente(2) tienen acceso total
   const esTecnico   = user?.rol === 4 || user?.rol === 6; // rol 6 = Contratista, mismos permisos que técnico
