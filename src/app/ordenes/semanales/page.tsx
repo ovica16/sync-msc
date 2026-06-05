@@ -162,7 +162,7 @@ function EstadoSelector({
           {ESTADO_LABEL[ot.estado]}
         </span>
         <a
-          href="/ordenes/reporte"
+          href={`/ordenes/reporte?ot=${ot.ordenTrabajoId}`}
           title={`Ver OT interna #${ot.ordenTrabajoNum}`}
           style={{ fontSize: 9, color: "#2563eb", fontWeight: 700, textDecoration: "none", whiteSpace: "nowrap" as const }}
         >

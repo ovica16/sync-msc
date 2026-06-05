@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import AppHeader from "@/components/AppHeader";
 import { useUser } from "@/context/AuthContext";
 import { generarInformeOT } from "@/lib/generarInformeOT";
@@ -194,6 +195,8 @@ function diffLineas(original: Linea[], editado: Linea[]): string[] {
 
 export default function ReporteOTPage() {
   const { user } = useUser();
+  const searchParams = useSearchParams();
+  const otParamId = searchParams.get("ot");
 
   // Derivados de rol — Admin(1) y Superintendente(2) tienen acceso total
   const esTecnico   = user?.rol === 4 || user?.rol === 6; // rol 6 = Contratista, mismos permisos que técnico
@@ -256,6 +259,13 @@ export default function ReporteOTPage() {
 
   useEffect(() => { fetch("/api/areas").then((r) => r.json()).then(setAreas).catch(() => {}); }, []);
   useEffect(() => { loadOrdenes(); }, [loadOrdenes]);
+
+  // Auto-seleccionar OT si viene el parámetro ?ot=<id> desde programa semanal
+  useEffect(() => {
+    if (!otParamId || ordenes.length === 0 || loading) return;
+    const match = ordenes.find((o) => o._id === otParamId);
+    if (match) setSelected(match);
+  }, [otParamId, ordenes, loading]);
 
   useEffect(() => {
     if (!selected) { setEditMode(false); return; }
