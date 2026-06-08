@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 export async function GET() {
   const planes = await prisma.programacionSemanal.findMany({
     where: { semana: 24, anio: 2026 },
-    orderBy: { areaCodigo: "asc" },
+    orderBy: { createdAt: "asc" },
   });
 
   const codigosPlanes = [...new Set(planes.map(p => p.areaCodigo).filter(Boolean))] as string[];
@@ -22,11 +22,19 @@ export async function GET() {
     area: areasExistentes.find(a => a.codigo === codigo) ?? null,
   }));
 
+  const planesSinArea = planes.filter(p => !p.areaCodigo).map(p => ({
+    id: p.id,
+    disciplina: p.disciplina,
+    areaCodigo: p.areaCodigo,
+    otsProgramadas: (p.otsProgramadas as {numeroOT?: string}[]).length,
+  }));
+
   return Response.json({
     semana: 24,
     anio: 2026,
     totalPlanes: planes.length,
     codigosUnicos: codigosPlanes.length,
+    planesSinArea,
     sinArea: resumen.filter(r => !r.existe),
     conArea: resumen.filter(r => r.existe),
   });
