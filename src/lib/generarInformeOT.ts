@@ -381,13 +381,13 @@ export async function generarInformeOT(ot: OTData): Promise<void> {
         ];
       }),
       headStyles: { fillColor: NAVY, textColor: BLANCO, fontSize: 7, fontStyle: "bold", cellPadding: 2.5 },
-      bodyStyles: { fontSize: 7.5, cellPadding: 2.5, textColor: NEGRO },
+      bodyStyles: { fontSize: 7.5, cellPadding: 2.5, textColor: NEGRO, overflow: "linebreak" },
       alternateRowStyles: { fillColor: GRIS_L },
       columnStyles: {
         0: { cellWidth: 22, halign: "center" },
         1: { cellWidth: 38 },
         2: { cellWidth: 14, halign: "center" },
-        3: { cellWidth: 106, overflow: "linebreak" },
+        3: { cellWidth: 96 },
       },
     });
     y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
