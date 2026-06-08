@@ -132,7 +132,7 @@ export async function POST(req: NextRequest) {
     const numeroOT = await siguienteNumeroOT();
     const esDePlan = !!body.programacionSemanalId;
 
-    const areaCodigo: string = body.areaCodigo?.trim() || "";
+    const areaCodigo: string | null = body.areaCodigo?.trim() || null;
 
     // Garantizar que el área exista antes de crear la OT
     if (areaCodigo) {
@@ -143,12 +143,13 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const ot = await prisma.ordenTrabajo.create({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const ot = await (prisma.ordenTrabajo.create as any)({
       data: {
         numeroOT,
         fecha: new Date(body.fecha),
         turno: body.turno,
-        ...(areaCodigo ? { areaCodigo } : {}),
+        areaCodigo,
         estado: body.estado ?? "borrador",
         origenPlan: esDePlan,
         programacionSemanalId: body.programacionSemanalId || null,
