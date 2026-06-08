@@ -132,7 +132,7 @@ export async function POST(req: NextRequest) {
     const numeroOT = await siguienteNumeroOT();
     const esDePlan = !!body.programacionSemanalId;
 
-    const areaCodigo: string | undefined = body.areaCodigo?.trim() || undefined;
+    const areaCodigo: string = body.areaCodigo?.trim() || "";
 
     // Garantizar que el área exista antes de crear la OT
     if (areaCodigo) {
@@ -148,7 +148,7 @@ export async function POST(req: NextRequest) {
         numeroOT,
         fecha: new Date(body.fecha),
         turno: body.turno,
-        areaCodigo: areaCodigo,
+        ...(areaCodigo ? { areaCodigo } : {}),
         estado: body.estado ?? "borrador",
         origenPlan: esDePlan,
         programacionSemanalId: body.programacionSemanalId || null,
