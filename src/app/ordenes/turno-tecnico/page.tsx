@@ -230,8 +230,10 @@ export default function ReporteTurnoTecnicoPage() {
     for (const prog of (Array.isArray(dataPlanes) ? dataPlanes : [])) {
       const disc = prog.disciplina ?? "";
       for (const ot of (prog.otsProgramadas ?? [])) {
-        // Solo el grupo exacto del turno (Diurno / Nocturno)
-        if (ot.grupo !== grupoTurno) continue;
+        // Diurno incluye G1-G4 (mantenimiento regular); Nocturno solo Nocturno
+        const esGrupoDiurno = ["Diurno", "G1", "G2", "G3", "G4"].includes(ot.grupo);
+        if (form.turno === "Nocturno" && ot.grupo !== "Nocturno") continue;
+        if (form.turno !== "Nocturno" && !esGrupoDiurno) continue;
         planes.push({
           id: `plan-${prog._id}-${ot.id ?? ot.numeroOT}`,
           numeroOT: ot.numeroOT,
