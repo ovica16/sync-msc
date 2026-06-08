@@ -925,13 +925,14 @@ function parseSheetRows(rows: unknown[][]): IOTProgramada[] {
     const tipoOT = row[1];
     const dia    = String(row[12] ?? "").trim();
     const grupo  = String(row[11] ?? "").trim();
-    if (noOT && typeof noOT === "number" && tipoOT && DIAS_VALIDOS_SET.has(dia)) {
+    const noOTStr = String(noOT ?? "").trim();
+    if (noOTStr && (typeof noOT === "number" || /^\d+$/.test(noOTStr)) && tipoOT && DIAS_VALIDOS_SET.has(dia)) {
       const personas   = Number(row[7]) || 1;
       const hrsTrabajo = Number(row[8]) || 0;
       const hhTotal    = Number(row[9]) || personas * hrsTrabajo;
       const personalRaw = String(row[10] ?? "");
       ots.push({
-        numeroOT:          String(noOT),
+        numeroOT:          noOTStr,
         tipoOT:            String(tipoOT).trim().toUpperCase(),
         tipoTrabajo:       String(row[2] ?? "").trim(),
         prioridad:         String(row[3] ?? "").trim() || undefined,
@@ -942,7 +943,7 @@ function parseSheetRows(rows: unknown[][]): IOTProgramada[] {
         personalAsignado: personalRaw
           ? personalRaw.split(/[/+]/).map(s => s.trim()).filter(Boolean)
           : [],
-        grupo: GRUPO_MAP_MODAL[grupo] ?? "Diurno",
+        grupo: (GRUPO_MAP_MODAL[grupo] ?? (grupo ? undefined : "Diurno")) as GrupoTrabajo || "Diurno",
         dia:   dia as DiaSemana,
         estado: "no_iniciada" as EstadoOTProgramada,
       });
@@ -1053,6 +1054,7 @@ function CargaCSVModal({
   async function handleGuardar() {
     try {
       setSaving(true); setError("");
+      if (!areaCodigo) { setError("Sin área activa — selecciona un área antes de subir el plan"); setSaving(false); return; }
       const ots = modo === "excel" ? preview : parseCSV(csv);
       if (!ots.length) { setError("No se encontraron OTs válidas"); return; }
 
@@ -1651,7 +1653,7 @@ export default function SemanalesPage() {
 
       {showCSV && (
         <CargaCSVModal
-          semana={semana} anio={anio} disciplina={areaActiva ? areaToDisciplina(areaActiva.codigo) : "INST"} areaCodigo={areaActiva?.codigo ?? ""} subidoPor="system"
+          semana={semana} anio={anio} disciplina={areaActiva ? areaToDisciplina(areaActiva.codigo) : "INST"} areaCodigo={areaActiva?.codigo ?? ""} subidoPor={user?.nombre ?? "system"}
           onClose={() => setShowCSV(false)}
           onSuccess={() => { setShowCSV(false); cargarPrograma(); }}
         />

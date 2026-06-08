@@ -1370,7 +1370,7 @@ export default function RegistroOTPage() {
     setEditLinea({ ...linea });
     setEditIdx(0);
     setIsNewLinea(false);
-    setStep(2);
+    setStep(ref.areaCodigo ? 2 : 1);
     setView("registro");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
