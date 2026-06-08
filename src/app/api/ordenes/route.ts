@@ -132,6 +132,15 @@ export async function POST(req: NextRequest) {
     const numeroOT = await siguienteNumeroOT();
     const esDePlan = !!body.programacionSemanalId;
 
+    // Garantizar que el área exista antes de crear la OT
+    if (body.areaCodigo) {
+      await prisma.area.upsert({
+        where: { codigo: String(body.areaCodigo) },
+        update: {},
+        create: { codigo: String(body.areaCodigo), nombre: String(body.areaCodigo), superintendencia: "" },
+      });
+    }
+
     const ot = await prisma.ordenTrabajo.create({
       data: {
         numeroOT,
