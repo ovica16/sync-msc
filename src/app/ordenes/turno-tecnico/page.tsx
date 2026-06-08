@@ -258,15 +258,20 @@ export default function ReporteTurnoTecnicoPage() {
     setOtsPlan(planes);
 
     // ── 3. OTs en_proceso del técnico de días anteriores (continuación) ────
-    // Busca OTs que el técnico dejó abiertas en días previos de la semana
-    const paramsCont = new URLSearchParams({ estado: "en_proceso", limit: "50" });
+    // Solo OTs de la semana actual (desde el lunes), no de semanas anteriores
+    const lunesFecha = new Date(form.fecha + "T12:00:00");
+    const diaSem = lunesFecha.getDay() || 7; // 1=Lu ... 7=Do
+    lunesFecha.setDate(lunesFecha.getDate() - (diaSem - 1));
+    const lunesStr = lunesFecha.toISOString().split("T")[0];
+
+    const paramsCont = new URLSearchParams({ estado: "en_proceso", limit: "50", fechaDesde: lunesStr });
     if (area) paramsCont.set("area", area);
     const dataCont: OTRegistrada[] = await fetch(`/api/ordenes?${paramsCont}`).then(r => r.json()).catch(() => []);
     const hoy = form.fecha;
     const continuacion = (Array.isArray(dataCont) ? dataCont : []).filter(o => {
-      // Solo OTs de días anteriores (no de hoy)
+      // Solo OTs de días anteriores esta semana (no de hoy)
       if (o.fecha.slice(0, 10) >= hoy) return false;
-      // Solo OTs del plan (origenPlan implícito: tienen otJdeNumero)
+      // Solo OTs del plan (tienen otJdeNumero)
       if (!o.otJdeNumero) return false;
       // Si es técnico (rol=4), solo sus OTs
       if (user?.rol === 4) {
