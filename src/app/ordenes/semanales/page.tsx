@@ -952,9 +952,9 @@ function parseSheetRows(rows: unknown[][]): IOTProgramada[] {
 }
 
 function CargaCSVModal({
-  semana, anio, disciplina, subidoPor, onClose, onSuccess,
+  semana, anio, disciplina, areaCodigo, subidoPor, onClose, onSuccess,
 }: {
-  semana: number; anio: number; disciplina: string; subidoPor: string;
+  semana: number; anio: number; disciplina: string; areaCodigo: string; subidoPor: string;
   onClose: () => void; onSuccess: () => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -1067,7 +1067,7 @@ function CargaCSVModal({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          semana, anio, disciplina,
+          semana, anio, disciplina, areaCodigo,
           fechaInicio:         lunes.toISOString(),
           fechaFin:            domingo.toISOString(),
           hhProgramadasSemana: hhProgramadas,
@@ -1651,7 +1651,7 @@ export default function SemanalesPage() {
 
       {showCSV && (
         <CargaCSVModal
-          semana={semana} anio={anio} disciplina={areaActiva ? areaToDisciplina(areaActiva.codigo) : "INST"} subidoPor="system"
+          semana={semana} anio={anio} disciplina={areaActiva ? areaToDisciplina(areaActiva.codigo) : "INST"} areaCodigo={areaActiva?.codigo ?? ""} subidoPor="system"
           onClose={() => setShowCSV(false)}
           onSuccess={() => { setShowCSV(false); cargarPrograma(); }}
         />

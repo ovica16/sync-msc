@@ -39,26 +39,32 @@ export async function GET() {
   });
 }
 
+// Mapeo disciplina → areaCodigo para corregir planes sin área
+const DISCIPLINA_A_AREA: Record<string, string> = {
+  INST:   "3320",
+  ELEC:   "3319",
+  TESA:   "3348",
+  TELECO: "3351",
+};
+
 export async function POST() {
   const planes = await prisma.programacionSemanal.findMany({
     where: { semana: 24, anio: 2026 },
   });
 
-  const codigosPlanes = [...new Set(planes.map(p => p.areaCodigo).filter(Boolean))] as string[];
-  const areasExistentes = await prisma.area.findMany({
-    where: { codigo: { in: codigosPlanes } },
-    select: { codigo: true },
-  });
-  const setExistentes = new Set(areasExistentes.map(a => a.codigo));
-  const faltantes = codigosPlanes.filter(c => !setExistentes.has(c));
+  const actualizados: { id: string; disciplina: string; areaCodigo: string }[] = [];
+  const sinMapeo: { id: string; disciplina: string }[] = [];
 
-  const creadas: string[] = [];
-  for (const codigo of faltantes) {
-    await prisma.area.create({
-      data: { codigo, nombre: codigo, superintendencia: "" },
+  for (const p of planes) {
+    if (p.areaCodigo) continue; // ya tiene área, saltar
+    const codigo = DISCIPLINA_A_AREA[p.disciplina ?? ""];
+    if (!codigo) { sinMapeo.push({ id: p.id, disciplina: p.disciplina ?? "" }); continue; }
+    await prisma.programacionSemanal.update({
+      where: { id: p.id },
+      data: { areaCodigo: codigo },
     });
-    creadas.push(codigo);
+    actualizados.push({ id: p.id, disciplina: p.disciplina ?? "", areaCodigo: codigo });
   }
 
-  return Response.json({ ok: true, faltantes, creadas });
+  return Response.json({ ok: true, actualizados, sinMapeo });
 }
