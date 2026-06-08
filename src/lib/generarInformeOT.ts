@@ -387,7 +387,7 @@ export async function generarInformeOT(ot: OTData): Promise<void> {
         0: { cellWidth: 22, halign: "center" },
         1: { cellWidth: 38 },
         2: { cellWidth: 14, halign: "center" },
-        3: { cellWidth: "auto" as unknown as number },
+        3: { cellWidth: 106, overflow: "linebreak" },
       },
     });
     y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
