@@ -26,7 +26,6 @@ export async function GET() {
     id: p.id,
     disciplina: p.disciplina,
     areaCodigo: p.areaCodigo,
-    otsProgramadas: (p.otsProgramadas as {numeroOT?: string}[]).length,
   }));
 
   return Response.json({
