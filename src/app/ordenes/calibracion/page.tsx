@@ -645,9 +645,15 @@ export default function CalibracionPage() {
       .then((d: PatronDoc[]) => setPatrones(d))
       .catch(() => {});
 
-    fetch("/api/usuarios?rol=4&area=3320")
-      .then((r) => r.json())
-      .then((d: UserOpt[]) => setTecnicos(d))
+    Promise.all([
+      fetch("/api/usuarios?rol=4&area=3320").then((r) => r.json()),
+      fetch("/api/usuarios?area=3320&contratista=true").then((r) => r.json()),
+    ])
+      .then(([tec, cont]: [UserOpt[], UserOpt[]]) => {
+        // Merge técnicos + contratistas, sin duplicados por _id
+        const merged = [...tec, ...cont.filter((c) => !tec.some((t) => t._id === c._id))];
+        setTecnicos(merged);
+      })
       .catch(() => {});
 
     // Supervisores: rol=3 del área 3320 + Superintendentes rol=1 que pueden firmar
